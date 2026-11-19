@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080b12">
+<title>NEXORA | Administration</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+:root {
+  --bg:#080b12;
+  --panel:#101622;
+  --panel2:#141d2b;
+  --border:#202c3c;
+  --text:#f1f5fc;
+  --muted:#8190a5;
+  --blue:#3987ff;
+  --green:#35d49a;
+  --red:#ff5e70;
+}
+
+* { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,sans-serif;
+  min-height:100vh;
+}
+
+button,input { font:inherit; }
+button { cursor:pointer; }
+
+.hidden { display:none !important; }
+
+#loading {
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  color:var(--muted);
+}
+
+.loader {
+  width:35px;height:35px;
+  border:3px solid var(--border);
+  border-top-color:var(--blue);
+  border-radius:50%;
+  animation:spin .8s linear infinite;
+  margin:auto auto 15px;
+}
+
+@keyframes spin { to {transform:rotate(360deg)} }
+
+#login {
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.login-card {
+  width:100%;
+  max-width:420px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:35px;
+  text-align:center;
+}
+
+.logo {
+  width:55px;height:55px;
+  border-radius:16px;
+  background:#173b72;
+  display:grid;
+  place-items:center;
+  margin:0 auto 20px;
+  color:#72aaff;
+}
+
+.logo i { width:28px;height:28px; }
+
+h1 { font-size:24px; letter-spacing:-1px; }
+.subtitle { color:var(--muted); font-size:13px; margin-top:10px; line-height:1.7; }
+
+.login-status {
+  margin-top:25px;
+  padding:13px;
+  background:var(--panel2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  font-size:12px;
+  color:var(--muted);
+}
+
+.layout { display:flex; min-height:100vh; }
+
+.sidebar {
+  width:250px;
+  background:#0c111b;
+  border-right:1px solid var(--border);
+  padding:25px 17px;
+  position:fixed;
+  inset:0 auto 0 0;
+  display:flex;
+  flex-direction:column;
+  z-index:5;
+}
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:5px 8px 30px;
+}
+
+.brand-icon {
+  background:#173b72;
+  color:#76adff;
+  padding:10px;
+  border-radius:11px;
+}
+
+.brand-name { font-size:17px;font-weight:800;letter-spacing:1px; }
+.brand-small { color:var(--muted);font-size:10px;margin-top:3px; }
+
+.nav-label {
+  color:#66758b;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:1.5px;
+  padding:15px 10px;
+}
+
+.nav-btn {
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border:0;
+  color:var(--muted);
+  background:transparent;
+  border-radius:9px;
+  padding:13px 12px;
+  text-align:left;
+  font-size:13px;
+  margin-bottom:5px;
+  transition:.2s;
+}
+
+.nav-btn i { width:18px;height:18px; }
+.nav-btn:hover,.nav-btn.active {
+  color:white;
+  background:#172943;
+}
+
+.nav-btn.active { box-shadow:inset 3px 0 var(--blue); }
+
+.sidebar-bottom { margin-top:auto; }
+
+.admin-profile {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:15px 5px;
+  border-top:1px solid var(--border);
+}
+
+.avatar {
+  width:35px;height:35px;
+  background:#203c60;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:#9cc4ff;
+  font-weight:700;
+}
+
+.admin-email {
+  font-size:11px;
+  color:var(--muted);
+  max-width:145px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.main {
+  margin-left:250px;
+  flex:1;
+  min-width:0;
+  padding:30px 35px;
+}
+
+.topbar {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:15px;
+  margin-bottom:35px;
+}
+
+.topbar h2 { font-size:23px;letter-spacing:-.8px; }
+.topbar p { color:var(--muted);font-size:12px;margin-top:7px; }
+
+.online {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 13px;
+  border:1px solid var(--border);
+  border-radius:30px;
+  font-size:11px;
+  color:var(--green);
+}
+
+.dot {
+  width:7px;height:7px;
+  background:var(--green);
+  border-radius:50%;
+}
+
+.page { display:none; }
+.page.active { display:block; }
+
+.stats {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:15px;
+  margin-bottom:25px;
+}
+
+.stat-card,.panel {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:13px;
+}
+
+.stat-card { padding:20px; }
+
+.stat-top {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.stat-icon {
+  background:#192a42;
+  color:#77aaff;
+  border-radius:9px;
+  padding:9px;
+}
+
+.stat-icon i { width:18px;height:18px; }
+
+.stat-value {
+  font-size:27px;
+  font-weight:800;
+  margin-top:20px;
+}
+
+.stat-note {
+  color:var(--muted);
+  font-size:10px;
+  margin-top:6px;
+}
+
+.panel { padding:23px;margin-bottom:20px; }
+
+.panel-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:20px;
+}
+
+.panel-header h3 { font-size:15px; }
+.panel-header p { color:var(--muted);font-size:11px;margin-top:6px; }
+
+.form-group { margin-bottom:17px; }
+.form-group label {
+  display:block;
+  font-size:11px;
+  color:#a6b4c8;
+  margin-bottom:9px;
+}
+
+.form-group input {
+  width:100%;
+  padding:13px;
+  background:#0a101a;
+  border:1px solid var(--border);
+  color:white;
+  border-radius:9px;
+  outline:none;
+}
+
+.form-group input:focus { border-color:var(--blue); }
+
+.primary-btn {
+  background:var(--blue);
+  color:white;
+  border:0;
+  padding:12px 17px;
+  border-radius:9px;
+  font-size:12px;
+  font-weight:700;
+  transition:.2s;
+}
+
+.primary-btn:hover { background:#216de0; }
+
+.secondary-btn {
+  background:#192334;
+  color:#c5d1e2;
+  border:1px solid var(--border);
+  padding:11px 14px;
+  border-radius:9px;
+  font-size:11px;
+}
+
+.danger-btn {
+  color:#ff7584;
+  background:#3a1820;
+  border:1px solid #632b35;
+  padding:8px 10px;
+  border-radius:7px;
+  font-size:10px;
+}
+
+.generated {
+  margin-top:20px;
+  padding:16px;
+  border:1px solid #245e54;
+  background:#102b28;
+  border-radius:10px;
+}
+
+.generated label { font-size:10px;color:var(--green); }
+.generated-row {
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+.generated code {
+  flex:1;
+  overflow-wrap:anywhere;
+  color:white;
+  font-size:12px;
+  line-height:1.6;
+}
+
+.generated button {
+  border:0;
+  border-radius:7px;
+  background:#205448;
+  color:white;
+  padding:9px 12px;
+}
+
+.toolbar {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:15px;
+}
+
+.search {
+  max-width:320px;
+  width:100%;
+  padding:11px 13px;
+  background:#0a101a;
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:white;
+  outline:none;
+}
+
+.table-wrap { overflow-x:auto; }
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  min-width:580px;
+}
+
+th {
+  text-align:left;
+  color:#75859b;
+  font-size:10px;
+  font-weight:600;
+  padding:13px 12px;
+  border-bottom:1px solid var(--border);
+}
+
+td {
+  padding:15px 12px;
+  border-bottom:1px solid #1c2634;
+  font-size:11px;
+  color:#c4cfdf;
+}
+
+td code { font-size:10px;color:#8cb9ff; }
+
+.status {
+  padding:5px 9px;
+  border-radius:20px;
+  font-size:9px;
+  font-weight:700;
+}
+
+.status.active { color:var(--green);background:#12382e; }
+.status.revoked { color:#ff7584;background:#3a1820; }
+
+.empty {
+  text-align:center;
+  padding:35px;
+  color:var(--muted);
+  font-size:12px;
+}
+
+.notice {
+  padding:14px;
+  border-radius:9px;
+  background:#172943;
+  color:#a9caff;
+  font-size:11px;
+  line-height:1.7;
+  margin-bottom:18px;
+}
+
+#toast {
+  position:fixed;
+  bottom:25px;
+  right:25px;
+  background:#162638;
+  border:1px solid #315174;
+  border-radius:10px;
+  padding:14px 20px;
+  font-size:12px;
+  z-index:20;
+  opacity:0;
+  transform:translateY(10px);
+  transition:.25s;
+  pointer-events:none;
+}
+
+#toast.show { opacity:1;transform:translateY(0); }
+
+.mobile-menu { display:none; }
+
+@media(max-width:1000px) {
+  .stats { grid-template-columns:repeat(2,1fr); }
+}
+
+@media(max-width:700px) {
+  .sidebar {
+    transform:translateX(-100%);
+    transition:.25s;
+  }
+  .sidebar.open { transform:translateX(0); }
+  .main { margin-left:0;padding:20px 15px; }
+  .mobile-menu { display:block; }
+  .topbar { align-items:flex-start; }
+  .stats { gap:10px; }
+  .stat-card { padding:14px; }
+  .stat-value { font-size:22px; }
+  .panel { padding:16px; }
+  .topbar h2 { font-size:19px; }
+}
+</style>
+</head>
+
+<body>
+
+<div id="loading">
+  <div style="text-align:center">
+    <div class="loader"></div>
+    <div style="font-size:12px">Verifying administrator access...</div>
+  </div>
+</div>
+
+<section id="login" class="hidden">
+  <div class="login-card">
+    <div class="logo"><i data-lucide="shield-check"></i></div>
+    <h1>NEXORA ADMIN</h1>
+    <p class="subtitle">
+      Private administrator environment.<br>
+      Only authorized administrators can continue.
+    </p>
+    <div class="login-status" id="login-message">
+      Verifying your Cloudflare Access identity...
+    </div>
+  </div>
+</section>
+
+<div id="app" class="layout hidden">
+
+<aside class="sidebar" id="sidebar">
+
+  <div class="brand">
+    <div class="brand-icon"><i data-lucide="hexagon"></i></div>
+    <div>
+      <div class="brand-name">NEXORA</div>
+      <div class="brand-small">ADMINISTRATION</div>
+    </div>
+  </div>
+
+  <div class="nav-label">MAIN MENU</div>
+
+  <button class="nav-btn active" data-page="overview">
+    <i data-lucide="layout-dashboard"></i> Overview
+  </button>
+
+  <button class="nav-btn" data-page="generator">
+    <i data-lucide="key-round"></i> License Generator
+  </button>
+
+  <button class="nav-btn" data-page="licenses">
+    <i data-lucide="database"></i> License History
+  </button>
+
+  <div class="sidebar-bottom">
+    <div class="nav-label">ADMINISTRATION</div>
+    <button class="nav-btn" data-page="settings">
+      <i data-lucide="settings"></i> Settings
+    </button>
+
+    <div class="admin-profile">
+      <div class="avatar">A</div>
+      <div>
+        <div style="font-size:12px;font-weight:700">Administrator</div>
+        <div class="admin-email" id="admin-email">Authorized admin</div>
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<main class="main">
+
+<header class="topbar">
+  <div style="display:flex;gap:13px;align-items:center">
+    <button class="secondary-btn mobile-menu" id="menu-btn">
+      <i data-lucide="menu"></i>
+    </button>
+    <div>
+      <h2 id="page-title">Dashboard Overview</h2>
+      <p>NEXORA Administration Control Center</p>
+    </div>
+  </div>
+
+  <div class="online"><span class="dot"></span> SYSTEM ONLINE</div>
+</header>
+
+<!-- OVERVIEW -->
+
+<section class="page active" id="overview">
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-top">TOTAL LICENSES <span class="stat-icon"><i data-lucide="key"></i></span></div>
+      <div class="stat-value" id="total-count">0</div>
+      <div class="stat-note">All generated licenses</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-top">ACTIVE LICENSES <span class="stat-icon"><i data-lucide="check-circle"></i></span></div>
+      <div class="stat-value" id="active-count">0</div>
+      <div class="stat-note">Currently valid licenses</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-top">REVOKED <span class="stat-icon"><i data-lucide="ban"></i></span></div>
+      <div class="stat-value" id="revoked-count">0</div>
+      <div class="stat-note">Disabled licenses</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-top">ADMIN ACCESS <span class="stat-icon"><i data-lucide="shield-check"></i></span></div>
+      <div class="stat-value" style="font-size:19px;color:var(--green)">SECURE</div>
+      <div class="stat-note">Cloudflare authenticated</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h3>Welcome to NEXORA</h3>
+        <p>Your private license management environment.</p>
+      </div>
+      <i data-lucide="shield" style="color:#6ba6ff;width:27px;height:27px"></i>
+    </div>
+
+    <div class="notice">
+      <strong>Administrator protection enabled.</strong><br>
+      Your dashboard is protected by Cloudflare Access. License secrets are generated and stored by the backend, never embedded in the frontend.
+    </div>
+
+    <button class="primary-btn" onclick="navigate('generator')">
+      Generate a License <i data-lucide="arrow-right" style="width:14px;vertical-align:middle"></i>
+    </button>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h3>Recent Licenses</h3>
+        <p>Latest generated license records.</p>
+      </div>
+      <button class="secondary-btn" onclick="navigate('licenses')">View all</button>
+    </div>
+    <div id="recent-table"></div>
+  </div>
+
+</section>
+
+<!-- GENERATOR -->
+
+<section class="page" id="generator">
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h3>License Key Generator</h3>
+        <p>Create one secure license key per request.</p>
+      </div>
+      <i data-lucide="key-round" style="color:#70aaff"></i>
+    </div>
+
+    <div class="notice">
+      Each license is randomly generated on the server. Only its SHA-256 hash is stored in the database. The original key is displayed once.
+    </div>
+
+    <form id="generator-form">
+
+      <div class="form-group">
+        <label>LICENSE OWNER / USER</label>
+        <input id="owner" type="text" maxlength="60"
+          placeholder="Enter username or customer name" required>
+      </div>
+
+      <div class="form-group">
+        <label>VALIDITY IN DAYS</label>
+        <input id="days" type="number" min="1" max="3650" value="30" required>
+      </div>
+
+      <button class="primary-btn" id="generate-btn" type="submit">
+        <i data-lucide="plus" style="width:14px;vertical-align:middle"></i>
+        Generate License
+      </button>
+
+    </form>
+
+    <div id="generated-result" class="generated hidden">
+      <label>NEW LICENSE CREATED — COPY IT NOW</label>
+      <div class="generated-row">
+        <code id="generated-key"></code>
+        <button onclick="copyLicense()">COPY</button>
+      </div>
+      <p style="font-size:10px;color:#a2cbbd;margin-top:10px">
+        This key will not be displayed again.
+      </p>
+    </div>
+  </div>
+
+</section>
+
+<!-- HISTORY -->
+
+<section class="page" id="licenses">
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h3>License Management</h3>
+        <p>Review, search and revoke issued licenses.</p>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input class="search" id="search" placeholder="Search license or owner...">
+      <button class="secondary-btn" onclick="loadLicenses()">Refresh</button>
+    </div>
+
+    <div id="license-table"></div>
+  </div>
+
+</section>
+
+<!-- SETTINGS -->
+
+<section class="page" id="settings">
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h3>Administrator Settings</h3>
+        <p>Security and account information.</p>
+      </div>
+      <i data-lucide="settings" style="color:#70aaff"></i>
+    </div>
+
+    <div class="form-group">
+      <label>AUTHORIZED ADMIN EMAIL</label>
+      <input id="settings-email" readonly>
+    </div>
+
+    <div class="form-group">
+      <label>AUTHENTICATION PROVIDER</label>
+      <input value="Cloudflare Access" readonly>
+    </div>
+
+    <div class="form-group">
+      <label>DATABASE</label>
+      <input value="Cloudflare KV" readonly>
+    </div>
+
+    <div class="form-group">
+      <label>APPLICATION</label>
+      <input value="NEXORA ADMIN" readonly>
+    </div>
+
+    <div class="notice">
+      Administrator permissions are managed through your Cloudflare Zero Trust Access policy, not through this webpage.
+    </div>
+
+    <button class="secondary-btn" onclick="location.href='/cdn-cgi/access/logout'">
+      <i data-lucide="log-out" style="width:14px;vertical-align:middle"></i>
+      Sign out
+    </button>
+  </div>
+
+</section>
+
+</main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = "/api";
+
+let admin = null;
+let licenses = [];
+let latestKey = "";
+
+const $ = id => document.getElementById(id);
+
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(API + path, {
+    ...options,
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Invalid server response.");
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed.");
+  }
+
+  return data;
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  })[c]);
+}
+
+async function initialize() {
+  try {
+    admin = await api("/admin/me");
+
+    $("admin-email").textContent = admin.email;
+    $("settings-email").value = admin.email;
+
+    $("loading").classList.add("hidden");
+    $("login").classList.add("hidden");
+    $("app").classList.remove("hidden");
+
+    await loadLicenses();
+
+  } catch (error) {
+    $("loading").classList.add("hidden");
+    $("login").classList.remove("hidden");
+    $("login-message").textContent =
+      error.message || "Administrator authentication required.";
+  }
+
+  lucide.createIcons();
+}
+
+function navigate(page) {
+  document.querySelectorAll(".page").forEach(p =>
+    p.classList.remove("active")
+  );
+
+  document.querySelectorAll(".nav-btn[data-page]").forEach(b =>
+    b.classList.toggle("active", b.dataset.page === page)
+  );
+
+  $(page).classList.add("active");
+
+  const titles = {
+    overview:"Dashboard Overview",
+    generator:"License Generator",
+    licenses:"License Management",
+    settings:"Administrator Settings"
+  };
+
+  $("page-title").textContent = titles[page];
+  $("sidebar").classList.remove("open");
+
+  if (page === "licenses") renderLicenses();
+  if (page === "overview") renderRecent();
+}
+
+document.querySelectorAll(".nav-btn[data-page]").forEach(button => {
+  button.addEventListener("click", () => navigate(button.dataset.page));
+});
+
+$("menu-btn").addEventListener("click", () =>
+  $("sidebar").classList.toggle("open")
+);
+
+async function loadLicenses() {
+  try {
+    const data = await api("/licenses");
+    licenses = data.licenses || [];
+
+    $("total-count").textContent = licenses.length;
+    $("active-count").textContent =
+      licenses.filter(x => x.status === "active").length;
+    $("revoked-count").textContent =
+      licenses.filter(x => x.status === "revoked").length;
+
+    renderLicenses();
+    renderRecent();
+
+  } catch(error) {
+    toast(error.message);
+  }
+}
+
+function makeTable(items) {
+  if (!items.length) {
+    return '<div class="empty">No license records found.</div>';
+  }
+
+  return `
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>LICENSE ID</th>
+        <th>OWNER</th>
+        <th>EXPIRES</th>
+        <th>STATUS</th>
+        <th>ACTION</th>
+      </tr>
+    </thead>
+    <tbody>
+    ${items.map(item => `
+      <tr>
+        <td><code>${escapeHTML(item.id.slice(0,12))}</code></td>
+        <td>${escapeHTML(item.owner)}</td>
+        <td>${new Date(item.expiresAt).toLocaleDateString()}</td>
+        <td>
+          <span class="status ${item.status}">
+            ${escapeHTML(item.status.toUpperCase())}
+          </span>
+        </td>
+        <td>
+          ${item.status === "active" ? `
+          <button class="danger-btn"
+            onclick="revokeLicense('${escapeHTML(item.id)}')">
+            Revoke
+          </button>` : '<span style="color:#8190a5">Disabled</span>'}
+        </td>
+      </tr>
+    `).join("")}
+    </tbody>
+  </table>
+  </div>`;
+}
+
+function renderLicenses() {
+  const query = $("search").value.toLowerCase();
+
+  const filtered = licenses.filter(item =>
+    item.owner.toLowerCase().includes(query) ||
+    item.id.toLowerCase().inclu

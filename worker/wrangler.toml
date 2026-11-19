@@ -5,7 +5,7 @@ compatibility_date = "2026-11-19"
 
 [[kv_namespaces]]
 binding = "LICENSE_DB"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "af1d9e6b2e6e4b878b50a4c81f29e4f7"
 
 [vars]
 ACCESS_TEAM_DOMAIN = "YOUR-TEAM.cloudflareaccess.com"

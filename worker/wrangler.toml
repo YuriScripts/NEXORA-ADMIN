@@ -5,5 +5,5 @@ compatibility_date = "2026-11-19"
 workers_dev = true
 
 [[kv_namespaces]]
-binding = "KV_BINDING"
+binding = "LICENSE_DB"
 id = "af1d9e6b2e6e4b878b50a4c81f29e4f7"

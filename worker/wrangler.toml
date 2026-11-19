@@ -1,0 +1,13 @@
+
+name = "nexora-admin-api"
+main = "src/index.js"
+compatibility_date = "2026-11-19"
+
+[[kv_namespaces]]
+binding = "LICENSE_DB"
+id = "YOUR_KV_NAMESPACE_ID"
+
+[vars]
+ACCESS_TEAM_DOMAIN = "YOUR-TEAM.cloudflareaccess.com"
+ACCESS_AUD = "YOUR-CLOUDFLARE-ACCESS-APPLICATION-AUD"
+ADMIN_EMAIL = "YOUR-ADMIN-EMAIL@example.com"

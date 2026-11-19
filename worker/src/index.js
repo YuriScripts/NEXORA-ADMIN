@@ -11,10 +11,8 @@ function corsHeaders(origin, env) {
 
   if (origin && origin === env.ADMIN_ORIGIN) {
     headers["Access-Control-Allow-Origin"] = origin;
-    headers["Access-Control-Allow-Headers"] =
-      "Content-Type, Authorization";
-    headers["Access-Control-Allow-Methods"] =
-      "GET, POST, OPTIONS";
+    headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
+    headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
   }
 
   return headers;
@@ -29,203 +27,117 @@ function json(data, status = 200, origin = null, env = {}) {
 
 function base64url(bytes) {
   let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 function decodeBase64url(value) {
-  const base64 = value
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-
-  const padded =
-    base64 + "=".repeat((4 - base64.length % 4) % 4);
-
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - base64.length % 4) % 4);
   return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
 }
 
 async function importSigningKey(secret) {
   return crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"]
+    "raw", encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]
   );
 }
 
 async function sign(data, secret) {
   const key = await importSigningKey(secret);
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(data)
-  );
-
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(data));
   return base64url(new Uint8Array(signature));
 }
 
 async function createToken(sid, secret) {
-  const payload = base64url(
-    encoder.encode(JSON.stringify({
-      sid,
-      exp: Math.floor(Date.now() / 1000) + SESSION_TTL
-    }))
-  );
-
+  const payload = base64url(encoder.encode(JSON.stringify({
+    sid, exp: Math.floor(Date.now() / 1000) + SESSION_TTL
+  })));
   return payload + "." + await sign(payload, secret);
 }
 
 async function verifyToken(token, secret) {
   try {
     const parts = token.split(".");
-
     if (parts.length !== 2) return null;
-
     const [payload, signature] = parts;
-
     const key = await importSigningKey(secret);
-
     const valid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      decodeBase64url(signature),
-      encoder.encode(payload)
+      "HMAC", key, decodeBase64url(signature), encoder.encode(payload)
     );
-
     if (!valid) return null;
-
-    const data = JSON.parse(
-      decoder.decode(decodeBase64url(payload))
-    );
-
-    if (!data.sid || !Number.isFinite(data.exp)) {
-      return null;
-    }
-
-    if (data.exp <= Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-
+    const data = JSON.parse(decoder.decode(decodeBase64url(payload)));
+    if (!data.sid || !Number.isFinite(data.exp)) return null;
+    if (data.exp <= Math.floor(Date.now() / 1000)) return null;
     return data;
-
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function hashKey(value) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    encoder.encode(value)
-  );
-
-  return [...new Uint8Array(digest)]
-    .map(x => x.toString(16).padStart(2, "0"))
-    .join("");
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
 function generateKey() {
-  const bytes = crypto.getRandomValues(
-    new Uint8Array(32)
-  );
-
-  return "NX-" + base64url(bytes);
+  return "NX-" + base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 function constantTimeEqual(a, b) {
   const x = encoder.encode(a);
   const y = encoder.encode(b);
-
   let difference = x.length ^ y.length;
-
   for (let i = 0; i < Math.max(x.length, y.length); i++) {
     difference |= (x[i] || 0) ^ (y[i] || 0);
   }
-
   return difference === 0;
 }
 
 async function authenticate(request, env) {
   const header = request.headers.get("Authorization") || "";
-
-  if (!header.startsWith("Bearer ")) {
-    return false;
-  }
-
-  const data = await verifyToken(
-    header.slice(7),
-    env.SESSION_SECRET
-  );
-
+  if (!header.startsWith("Bearer ")) return false;
+  const data = await verifyToken(header.slice(7), env.SESSION_SECRET);
   if (!data) return false;
-
-  const session = await env.LICENSE_DB.get(
-    "session:" + data.sid
-  );
-
-  return session === "admin";
+  return (await env.LICENSE_DB.get("session:" + data.sid)) === "admin";
 }
 
 async function readLicenses(env) {
-  const result = await env.LICENSE_DB.list({
-    prefix: "license:",
-    limit: 1000
-  });
-
-  const records = await Promise.all(
-    result.keys.map(async entry => {
-      const value = await env.LICENSE_DB.get(
-        entry.name,
-        "json"
-      );
-
-      if (!value) return null;
-
-      const expired =
-        Date.now() >= Date.parse(value.expiresAt);
-
-      const status = value.revoked
-        ? "revoked"
-        : expired
-          ? "expired"
-          : "active";
-
-      return {
-        ...value,
-        status,
-        deviceBound: Boolean(value.deviceId)
-      };
-    })
-  );
-
-  return records
-    .filter(Boolean)
-    .sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt)
-    );
+  const result = await env.LICENSE_DB.list({ prefix: "license:", limit: 1000 });
+  const records = await Promise.all(result.keys.map(async entry => {
+    const value = await env.LICENSE_DB.get(entry.name, "json");
+    if (!value) return null;
+    const expired = Date.now() >= Date.parse(value.expiresAt);
+    const status = value.revoked ? "revoked" : expired ? "expired" : "active";
+    return { ...value, status, deviceBound: Boolean(value.deviceId) };
+  }));
+  return records.filter(Boolean).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 function validDeviceId(value) {
-  return typeof value === "string" &&
-    /^[a-f0-9-]{36}$/i.test(value);
+  return typeof value === "string" && /^[a-f0-9-]{36}$/i.test(value);
 }
 
 function validLicense(record) {
-  return Boolean(
-    record &&
-    !record.revoked &&
+  return Boolean(record && !record.revoked &&
     Number.isFinite(Date.parse(record.expiresAt)) &&
-    Date.now() < Date.parse(record.expiresAt)
-  );
+    Date.now() < Date.parse(record.expiresAt));
+}
+
+async function deleteHashMappings(env, id) {
+  let cursor;
+  do {
+    const options = { prefix: "hash:", limit: 1000 };
+    if (cursor) options.cursor = cursor;
+    const page = await env.LICENSE_DB.list(options);
+
+    for (const entry of page.keys) {
+      const mappedId = await env.LICENSE_DB.get(entry.name);
+      if (mappedId === id) await env.LICENSE_DB.delete(entry.name);
+    }
+
+    cursor = page.cursor;
+    if (page.list_complete) break;
+  } while (cursor);
 }
 
 export default {
@@ -235,238 +147,87 @@ export default {
     const origin = request.headers.get("Origin");
 
     try {
-
-      /* SERVER CONFIGURATION */
-
-      if (
-        !env.ADMIN_PASSWORD ||
-        !env.SESSION_SECRET ||
-        !env.LICENSE_DB ||
-        !env.ADMIN_ORIGIN
-      ) {
-        return json(
-          { error: "Server configuration incomplete." },
-          500,
-          origin,
-          env
-        );
+      if (!env.ADMIN_PASSWORD || !env.SESSION_SECRET || !env.LICENSE_DB || !env.ADMIN_ORIGIN) {
+        return json({ error: "Server configuration incomplete." }, 500, origin, env);
       }
 
       if (env.SESSION_SECRET.length < 32) {
-        return json(
-          { error: "Session secret must be at least 32 characters." },
-          500,
-          origin,
-          env
-        );
+        return json({ error: "Session secret must be at least 32 characters." }, 500, origin, env);
       }
 
-      /* CORS PROTECTION */
-
       if (origin && origin !== env.ADMIN_ORIGIN) {
-        return json(
-          { error: "Origin not allowed." },
-          403,
-          origin,
-          env
-        );
+        return json({ error: "Origin not allowed." }, 403, origin, env);
       }
 
       if (request.method === "OPTIONS") {
-        if (!origin || origin !== env.ADMIN_ORIGIN) {
-          return new Response(null, { status: 403 });
-        }
-
+        if (!origin || origin !== env.ADMIN_ORIGIN) return new Response(null, { status: 403 });
         return new Response(null, {
           status: 204,
-          headers: {
-            ...corsHeaders(origin, env),
-            "Access-Control-Max-Age": "600"
-          }
+          headers: { ...corsHeaders(origin, env), "Access-Control-Max-Age": "600" }
         });
       }
 
       /* ADMIN LOGIN */
-
-      if (
-        request.method === "POST" &&
-        path === "/api/login"
-      ) {
+      if (request.method === "POST" && path === "/api/login") {
         const body = await request.json();
-
         const password = String(body.password || "");
-
-        if (!constantTimeEqual(
-          password,
-          env.ADMIN_PASSWORD
-        )) {
-          return json(
-            { error: "Invalid password." },
-            401,
-            origin,
-            env
-          );
+        if (!constantTimeEqual(password, env.ADMIN_PASSWORD)) {
+          return json({ error: "Invalid password." }, 401, origin, env);
         }
 
         const sid = crypto.randomUUID();
-
-        await env.LICENSE_DB.put(
-          "session:" + sid,
-          "admin",
-          { expirationTtl: SESSION_TTL }
-        );
-
-        const token = await createToken(
-          sid,
-          env.SESSION_SECRET
-        );
-
-        return json({
-          success: true,
-          token,
-          expiresIn: SESSION_TTL
-        }, 200, origin, env);
+        await env.LICENSE_DB.put("session:" + sid, "admin", { expirationTtl: SESSION_TTL });
+        const token = await createToken(sid, env.SESSION_SECRET);
+        return json({ success: true, token, expiresIn: SESSION_TTL }, 200, origin, env);
       }
 
       /* SESSION VERIFICATION */
-
-      if (
-        request.method === "GET" &&
-        path === "/api/admin/me"
-      ) {
+      if (request.method === "GET" && path === "/api/admin/me") {
         if (!await authenticate(request, env)) {
-          return json(
-            { error: "Unauthorized." },
-            401,
-            origin,
-            env
-          );
+          return json({ error: "Unauthorized." }, 401, origin, env);
         }
-
-        return json(
-          { authenticated: true },
-          200,
-          origin,
-          env
-        );
+        return json({ authenticated: true }, 200, origin, env);
       }
 
       /* LOGOUT */
-
-      if (
-        request.method === "POST" &&
-        path === "/api/logout"
-      ) {
-        const header =
-          request.headers.get("Authorization") || "";
-
+      if (request.method === "POST" && path === "/api/logout") {
+        const header = request.headers.get("Authorization") || "";
         if (header.startsWith("Bearer ")) {
-          const data = await verifyToken(
-            header.slice(7),
-            env.SESSION_SECRET
-          );
-
-          if (data) {
-            await env.LICENSE_DB.delete(
-              "session:" + data.sid
-            );
-          }
+          const data = await verifyToken(header.slice(7), env.SESSION_SECRET);
+          if (data) await env.LICENSE_DB.delete("session:" + data.sid);
         }
-
-        return json(
-          { success: true },
-          200,
-          origin,
-          env
-        );
+        return json({ success: true }, 200, origin, env);
       }
 
-      /* PUBLIC LICENSE VALIDATION
-         Used by NEXORA Manual Optimizer.
-         First successful activation binds the device.
-      */
-
-      if (
-        request.method === "POST" &&
-        path === "/api/validate"
-      ) {
+      /* PUBLIC LICENSE VALIDATION */
+      if (request.method === "POST" && path === "/api/validate") {
         const body = await request.json();
-
         const key = String(body.key || "").trim();
         const deviceId = body.deviceId;
 
-        if (
-          !key ||
-          key.length > 100 ||
-          !validDeviceId(deviceId)
-        ) {
-          return json(
-            {
-              valid: false,
-              error: "Invalid license credentials."
-            },
-            400,
-            origin,
-            env
-          );
+        if (!key || key.length > 100 || !validDeviceId(deviceId)) {
+          return json({ valid: false, error: "Invalid license credentials." }, 400, origin, env);
         }
 
         const hash = await hashKey(key);
-
-        const id = await env.LICENSE_DB.get(
-          "hash:" + hash
-        );
-
-        if (!id) {
-          return json(
-            { valid: false, error: "Invalid license key." },
-            403,
-            origin,
-            env
-          );
-        }
+        const id = await env.LICENSE_DB.get("hash:" + hash);
+        if (!id) return json({ valid: false, error: "Invalid license key." }, 403, origin, env);
 
         const storageKey = "license:" + id;
-
-        const license = await env.LICENSE_DB.get(
-          storageKey,
-          "json"
-        );
-
+        const license = await env.LICENSE_DB.get(storageKey, "json");
         if (!validLicense(license)) {
-          return json(
-            { valid: false, error: "License expired or revoked." },
-            403,
-            origin,
-            env
-          );
+          return json({ valid: false, error: "License expired or revoked." }, 403, origin, env);
         }
 
-        /* DEVICE BINDING */
-
         if (!license.deviceId) {
-
           license.deviceId = deviceId;
           license.deviceBoundAt = new Date().toISOString();
-
-          await env.LICENSE_DB.put(
-            storageKey,
-            JSON.stringify(license)
-          );
-
-        } else if (
-          license.deviceId !== deviceId
-        ) {
-
-          return json(
-            {
-              valid: false,
-              error: "This license is already activated on another device."
-            },
-            403,
-            origin,
-            env
-          );
+          await env.LICENSE_DB.put(storageKey, JSON.stringify(license));
+        } else if (license.deviceId !== deviceId) {
+          return json({
+            valid: false,
+            error: "This license is already activated on another device."
+          }, 403, origin, env);
         }
 
         return json({
@@ -477,79 +238,59 @@ export default {
         }, 200, origin, env);
       }
 
-      /* ALL REMAINING ENDPOINTS REQUIRE ADMIN */
-
+      /* ADMIN AUTH REQUIRED */
       if (!await authenticate(request, env)) {
-        return json(
-          { error: "Unauthorized." },
-          401,
-          origin,
-          env
-        );
+        return json({ error: "Unauthorized." }, 401, origin, env);
+      }
+
+      /* DELETE REVOKED LICENSE */
+      if (request.method === "DELETE" && /^\/api\/licenses\/[a-f0-9-]+$/i.test(path)) {
+        const id = path.split("/").pop();
+        const storageKey = "license:" + id;
+        const record = await env.LICENSE_DB.get(storageKey, "json");
+
+        if (!record) return json({ error: "License not found." }, 404, origin, env);
+
+        if (!record.revoked) {
+          return json({ error: "Revoke this license before deleting it." }, 409, origin, env);
+        }
+
+        await deleteHashMappings(env, id);
+        await env.LICENSE_DB.delete(storageKey);
+
+        return json({
+          success: true,
+          message: "Revoked license permanently deleted."
+        }, 200, origin, env);
       }
 
       /* LIST LICENSES */
-
-      if (
-        request.method === "GET" &&
-        path === "/api/licenses"
-      ) {
-        const licenses = await readLicenses(env);
-
-        return json(
-          { licenses },
-          200,
-          origin,
-          env
-        );
+      if (request.method === "GET" && path === "/api/licenses") {
+        return json({ licenses: await readLicenses(env) }, 200, origin, env);
       }
 
       /* GENERATE LICENSE */
-
-      if (
-        request.method === "POST" &&
-        path === "/api/licenses"
-      ) {
+      if (request.method === "POST" && path === "/api/licenses") {
         const body = await request.json();
-
         const owner = String(body.owner || "").trim();
         const days = Number(body.days);
 
         if (!owner || owner.length > 60) {
-          return json(
-            { error: "Invalid license owner." },
-            400,
-            origin,
-            env
-          );
+          return json({ error: "Invalid license owner." }, 400, origin, env);
         }
 
-        if (
-          !Number.isInteger(days) ||
-          days < 1 ||
-          days > 3650
-        ) {
-          return json(
-            { error: "Validity must be 1–3650 days." },
-            400,
-            origin,
-            env
-          );
+        if (!Number.isInteger(days) || days < 1 || days > 3650) {
+          return json({ error: "Validity must be 1–3650 days." }, 400, origin, env);
         }
 
         const key = generateKey();
         const hash = await hashKey(key);
         const id = crypto.randomUUID();
-
         const now = new Date();
-
-        const expires = new Date(
-          now.getTime() + days * 86400000
-        );
+        const expires = new Date(now.getTime() + days * 86400000);
 
         const record = {
-          id,
-          owner,
+          id, owner,
           createdAt: now.toISOString(),
           expiresAt: expires.toISOString(),
           revoked: false,
@@ -557,116 +298,51 @@ export default {
           deviceBoundAt: null
         };
 
-        await env.LICENSE_DB.put(
-          "license:" + id,
-          JSON.stringify(record)
-        );
-
-        await env.LICENSE_DB.put(
-          "hash:" + hash,
-          id
-        );
+        await env.LICENSE_DB.put("license:" + id, JSON.stringify(record));
+        await env.LICENSE_DB.put("hash:" + hash, id);
 
         return json({
           success: true,
           key,
-          license: {
-            ...record,
-            status: "active",
-            deviceBound: false
-          }
+          license: { ...record, status: "active", deviceBound: false }
         }, 201, origin, env);
       }
 
-      /* LICENSE ADMINISTRATION */
-
-      const match = path.match(
-        /^\/api\/licenses\/([a-f0-9-]+)\/(revoke|unbind)$/i
-      );
+      /* REVOKE AND UNBIND */
+      const match = path.match(/^\/api\/licenses\/([a-f0-9-]+)\/(revoke|unbind)$/i);
 
       if (match && request.method === "POST") {
-
         const id = match[1];
         const action = match[2];
-
         const storageKey = "license:" + id;
+        const record = await env.LICENSE_DB.get(storageKey, "json");
 
-        const record = await env.LICENSE_DB.get(
-          storageKey,
-          "json"
-        );
-
-        if (!record) {
-          return json(
-            { error: "License not found." },
-            404,
-            origin,
-            env
-          );
-        }
+        if (!record) return json({ error: "License not found." }, 404, origin, env);
 
         if (action === "revoke") {
-
           if (record.revoked) {
-            return json(
-              { error: "License already revoked." },
-              409,
-              origin,
-              env
-            );
+            return json({ error: "License already revoked." }, 409, origin, env);
           }
-
           record.revoked = true;
           record.revokedAt = new Date().toISOString();
-
         } else if (action === "unbind") {
-
           if (record.revoked) {
-            return json(
-              { error: "Cannot unbind a revoked license." },
-              409,
-              origin,
-              env
-            );
+            return json({ error: "Cannot unbind a revoked license." }, 409, origin, env);
           }
-
           record.deviceId = null;
           record.deviceBoundAt = null;
           record.deviceUnboundAt = new Date().toISOString();
         }
 
-        await env.LICENSE_DB.put(
-          storageKey,
-          JSON.stringify(record)
-        );
-
-        return json(
-          { success: true, action },
-          200,
-          origin,
-          env
-        );
+        await env.LICENSE_DB.put(storageKey, JSON.stringify(record));
+        return json({ success: true, action }, 200, origin, env);
       }
 
-      /* UNKNOWN ENDPOINT */
-
-      return json(
-        { error: "Endpoint not found." },
-        404,
-        origin,
-        env
-      );
+      return json({ error: "Endpoint not found." }, 404, origin, env);
 
     } catch (error) {
-
       console.error("NEXORA API error:", error.message);
-
-      return json(
-        { error: "Internal server error." },
-        500,
-        origin,
-        env
-      );
+      return json({ error: "Internal server error." }, 500, origin, env);
     }
   }
 };

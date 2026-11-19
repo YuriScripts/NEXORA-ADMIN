@@ -2,25 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXORA | Admin Panel</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXORA | Admin Control Center</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#080d18;color:#edf3ff;font-family:Arial,sans-serif}
-.container{max-width:1050px;margin:50px auto;padding:20px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:35px}
-h1{font-size:27px;letter-spacing:3px;color:#62a5ff}
-.card{background:#111b2d;border:1px solid #263a58;border-radius:15px;padding:25px;margin-bottom:20px}
+.container{max-width:1050px;margin:40px auto;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
+h1{color:#62a5ff;letter-spacing:3px}
+.card{background:#111b2d;border:1px solid #263a58;border-radius:15px;padding:24px;margin-bottom:20px}
 input,button{width:100%;padding:14px;margin:8px 0;border-radius:8px;border:1px solid #344a69;background:#0b1424;color:white}
 button{background:#2477ed;border:0;font-weight:bold;cursor:pointer}
-button:hover{background:#4690ff}
+button:disabled{opacity:.5}
 .secondary{background:#293b55}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:15px}
 .hidden{display:none}
-.status{color:#8abaff;font-size:14px;margin-top:12px;overflow-wrap:anywhere}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}
-h2{font-size:19px}
+.status{color:#91baff;font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere}
 small{color:#91a6c4}
-pre{white-space:pre-wrap;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+td,th{padding:10px;text-align:left;border-bottom:1px solid #293b55}
+.tablewrap{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -31,207 +32,209 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}
 </header>
 
 <section id="login" class="card">
-<h2>Administrator Authentication</h2>
-<p><small>Sign in using your administrator credentials.</small></p>
-<input id="username" placeholder="Administrator username" autocomplete="username">
-<input id="password" type="password" placeholder="Administrator password" autocomplete="current-password">
+<h2>Administrator Login</h2>
+<input id="password" type="password" placeholder="Administrator password">
 <button id="loginBtn" onclick="login()">Authenticate</button>
-<div id="loginStatus" class="status">Ready to authenticate.</div>
+<div id="loginStatus" class="status">Ready.</div>
 </section>
 
 <section id="dashboard" class="hidden">
 <div class="card">
-<h2>Administrator Dashboard</h2>
-<p>Authentication successful.</p>
+<h2>Dashboard</h2>
+<p class="status">Administrator authenticated.</p>
 <button class="secondary" onclick="logout()">Logout</button>
 </div>
 
 <div class="grid">
 <div class="card">
-<h2>Create License</h2>
-<input id="licenseName" placeholder="Customer / License name">
-<input id="licenseDays" type="number" min="1" placeholder="Validity in days">
-<button onclick="createLicense()">Generate License</button>
+<h2>Generate License</h2>
+<input id="owner" placeholder="License owner">
+<input id="days" type="number" min="1" max="3650" placeholder="Validity in days">
+<button onclick="createLicense()">Generate Key</button>
 <div id="createStatus" class="status"></div>
 </div>
 
 <div class="card">
-<h2>License Lookup</h2>
-<input id="lookupKey" placeholder="Enter license key">
-<button onclick="lookupLicense()">Check License</button>
-<button class="secondary" onclick="revokeLicense()">Revoke License</button>
-<div id="lookupStatus" class="status"></div>
+<h2>License Management</h2>
+<button onclick="loadLicenses()">Refresh Licenses</button>
+<div id="licenseStatus" class="status"></div>
 </div>
 </div>
 
 <div class="card">
-<h2>API Response</h2>
-<pre id="output" class="status">No requests yet.</pre>
+<h2>License Database</h2>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Owner</th><th>Status</th><th>Expiration</th><th>Action</th></tr></thead>
+<tbody id="licenseRows"></tbody>
+</table>
+</div>
 </div>
 </section>
 </div>
 
 <script>
-const API = "https://nexora-admin-api.creyyllaguno.workers.dev";
+const API="https://nexora-admin-api.creyyllaguno.workers.dev";
+let token=sessionStorage.getItem("nexora_session");
 
-let sessionToken = sessionStorage.getItem("nexora_session");
+async function api(path,method="GET",body=null){
+ const headers={"Content-Type":"application/json"};
+ if(token) headers.Authorization="Bearer "+token;
 
-async function request(path, method="GET", body=null) {
-    const headers = {
-        "Content-Type": "application/json"
-    };
+ const response=await fetch(API+path,{
+  method,
+  headers,
+  body:body?JSON.stringify(body):null
+ });
 
-    if(sessionToken) {
-        headers.Authorization = "Bearer " + sessionToken;
-    }
+ const data=await response.json().catch(()=>({error:"Invalid server response"}));
 
-    const response = await fetch(API + path, {
-        method,
-        headers,
-        credentials: "include",
-        body: body ? JSON.stringify(body) : null
-    });
-
-    const data = await response.json().catch(() => ({
-        error: "Invalid server response"
-    }));
-
-    if(!response.ok) {
-        throw new Error(data.error || data.message || "HTTP " + response.status);
-    }
-
-    return data;
+ if(!response.ok) throw new Error(data.error||"HTTP "+response.status);
+ return data;
 }
 
-function show(element, message) {
-    document.getElementById(element).textContent = message;
+function status(id,message){
+ document.getElementById(id).textContent=message;
 }
 
-async function login() {
-    const button = document.getElementById("loginBtn");
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value;
-
-    if(!username || !password) {
-        show("loginStatus","Enter your administrator credentials.");
-        return;
-    }
-
-    button.disabled = true;
-    show("loginStatus","Authenticating...");
-
-    try {
-        const result = await request("/admin/login","POST",{
-            username,
-            password
-        });
-
-        if(!result.token) {
-            throw new Error("Server did not return a session token.");
-        }
-
-        sessionToken = result.token;
-        sessionStorage.setItem("nexora_session",sessionToken);
-
-        show("loginStatus","Authentication successful.");
-        await verifySession();
-
-    } catch(error) {
-        show("loginStatus","Login failed: " + error.message);
-    } finally {
-        button.disabled = false;
-    }
+function showDashboard(){
+ document.getElementById("login").classList.add("hidden");
+ document.getElementById("dashboard").classList.remove("hidden");
 }
 
-async function verifySession() {
-    try {
-        await request("/admin/verify");
-
-        document.getElementById("login").classList.add("hidden");
-        document.getElementById("dashboard").classList.remove("hidden");
-
-    } catch(error) {
-        sessionToken = null;
-        sessionStorage.removeItem("nexora_session");
-        document.getElementById("login").classList.remove("hidden");
-        document.getElementById("dashboard").classList.add("hidden");
-        show("loginStatus","Verification failed: " + error.message);
-    }
+function showLogin(){
+ document.getElementById("login").classList.remove("hidden");
+ document.getElementById("dashboard").classList.add("hidden");
 }
 
-async function createLicense() {
-    try {
-        const name = document.getElementById("licenseName").value.trim();
-        const days = Number(document.getElementById("licenseDays").value);
+async function login(){
+ const button=document.getElementById("loginBtn");
+ const password=document.getElementById("password").value;
 
-        if(!name || !Number.isInteger(days) || days < 1) {
-            throw new Error("Enter a name and valid number of days.");
-        }
+ if(!password){
+  status("loginStatus","Enter your administrator password.");
+  return;
+ }
 
-        const result = await request("/admin/licenses","POST",{
-            name,
-            days
-        });
+ button.disabled=true;
+ status("loginStatus","Authenticating...");
 
-        show("createStatus",JSON.stringify(result,null,2));
-        document.getElementById("output").textContent =
-            JSON.stringify(result,null,2);
+ try{
+  const result=await api("/api/login","POST",{password});
 
-    } catch(error) {
-        show("createStatus",error.message);
-    }
+  if(!result.token) throw new Error("No session token returned.");
+
+  token=result.token;
+  sessionStorage.setItem("nexora_session",token);
+
+  await verifySession();
+ }catch(error){
+  token=null;
+  sessionStorage.removeItem("nexora_session");
+  status("loginStatus",error.message);
+ }finally{
+  button.disabled=false;
+ }
 }
 
-async function lookupLicense() {
-    try {
-        const key = document.getElementById("lookupKey").value.trim();
-
-        if(!key) throw new Error("Enter a license key.");
-
-        const result = await request(
-            "/admin/licenses/" + encodeURIComponent(key)
-        );
-
-        show("lookupStatus",JSON.stringify(result,null,2));
-        document.getElementById("output").textContent =
-            JSON.stringify(result,null,2);
-
-    } catch(error) {
-        show("lookupStatus",error.message);
-    }
+async function verifySession(){
+ try{
+  await api("/api/admin/me");
+  showDashboard();
+  await loadLicenses();
+ }catch(error){
+  token=null;
+  sessionStorage.removeItem("nexora_session");
+  showLogin();
+  status("loginStatus","Verification failed: "+error.message);
+ }
 }
 
-async function revokeLicense() {
-    try {
-        const key = document.getElementById("lookupKey").value.trim();
+async function createLicense(){
+ try{
+  const owner=document.getElementById("owner").value.trim();
+  const days=Number(document.getElementById("days").value);
 
-        if(!key) throw new Error("Enter a license key.");
+  if(!owner||!Number.isInteger(days)||days<1||days>3650)
+   throw new Error("Enter a valid owner and duration (1–3650 days).");
 
-        const result = await request(
-            "/admin/licenses/" + encodeURIComponent(key) + "/revoke",
-            "POST"
-        );
+  const result=await api("/api/licenses","POST",{owner,days});
 
-        show("lookupStatus",JSON.stringify(result,null,2));
-        document.getElementById("output").textContent =
-            JSON.stringify(result,null,2);
+  status("createStatus",
+   "LICENSE GENERATED\n\n"+result.key+
+   "\n\nExpires: "+result.license.expiresAt);
 
-    } catch(error) {
-        show("lookupStatus",error.message);
-    }
+  await loadLicenses();
+ }catch(error){
+  status("createStatus",error.message);
+ }
 }
 
-function logout() {
-    sessionToken = null;
-    sessionStorage.removeItem("nexora_session");
-    document.getElementById("dashboard").classList.add("hidden");
-    document.getElementById("login").classList.remove("hidden");
-    show("loginStatus","Logged out.");
+async function loadLicenses(){
+ try{
+  const result=await api("/api/licenses");
+  const rows=document.getElementById("licenseRows");
+  rows.replaceChildren();
+
+  for(const license of result.licenses){
+   const tr=document.createElement("tr");
+
+   const owner=document.createElement("td");
+   owner.textContent=license.owner;
+
+   const state=document.createElement("td");
+   state.textContent=license.status;
+
+   const expiry=document.createElement("td");
+   expiry.textContent=new Date(license.expiresAt).toLocaleDateString();
+
+   const action=document.createElement("td");
+
+   if(license.status==="active"){
+    const btn=document.createElement("button");
+    btn.textContent="Revoke";
+    btn.onclick=()=>revokeLicense(license.id);
+    action.appendChild(btn);
+   }else{
+    action.textContent="—";
+   }
+
+   tr.append(owner,state,expiry,action);
+   rows.appendChild(tr);
+  }
+
+  status("licenseStatus",result.licenses.length+" license(s) found.");
+ }catch(error){
+  status("licenseStatus",error.message);
+ }
 }
 
-if(sessionToken) {
-    verifySession();
+async function revokeLicense(id){
+ if(!confirm("Revoke this license?"))return;
+
+ try{
+  await api("/api/licenses/"+encodeURIComponent(id)+"/revoke","POST");
+  status("licenseStatus","License revoked.");
+  await loadLicenses();
+ }catch(error){
+  status("licenseStatus",error.message);
+ }
 }
+
+async function logout(){
+ try{
+  await api("/api/logout","POST");
+ }catch(error){
+  console.error(error);
+ }finally{
+  token=null;
+  sessionStorage.removeItem("nexora_session");
+  showLogin();
+  status("loginStatus","Logged out.");
+ }
+}
+
+if(token) verifySession();
 </script>
 </body>
 </html>

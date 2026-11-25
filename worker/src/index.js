@@ -83,6 +83,32 @@ function generateKey() {
   return "NX-" + base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
+// License keys are encrypted at rest for authenticated admin recovery. The
+// existing SESSION_SECRET is used to derive the AES-GCM key; keep it backed up.
+async function encryptionKey(secret) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode("NEXORA-LICENSE-KEYS:" + secret));
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+async function encryptLicenseKey(value, secret) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await encryptionKey(secret);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(value));
+  return { keyEncrypted: base64url(new Uint8Array(encrypted)), keyIv: base64url(iv) };
+}
+async function decryptLicenseKey(record, secret) {
+  if (!record || !record.keyEncrypted || !record.keyIv) return null;
+  try {
+    const key = await encryptionKey(secret);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decodeBase64url(record.keyIv) }, key, decodeBase64url(record.keyEncrypted));
+    return decoder.decode(plain);
+  } catch { return null; }
+}
+function cleanDeviceText(value, max = 120) {
+  if (typeof value !== "string") return null;
+  const clean = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().replace(/\s+/g, " ");
+  return clean ? clean.slice(0, max) : null;
+}
+
 function constantTimeEqual(a, b) {
   const x = encoder.encode(a);
   const y = encoder.encode(b);
@@ -108,7 +134,8 @@ async function readLicenses(env) {
     if (!value) return null;
     const expired = Date.now() >= Date.parse(value.expiresAt);
     const status = value.revoked ? "revoked" : expired ? "expired" : "active";
-    return { ...value, status, deviceBound: Boolean(value.deviceId) };
+    const licenseKey = await decryptLicenseKey(value, env.SESSION_SECRET);
+    return { ...value, keyEncrypted: undefined, keyIv: undefined, licenseKey, status, deviceBound: Boolean(value.deviceId) };
   }));
   return records.filter(Boolean).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -219,6 +246,11 @@ export default {
           return json({ valid: false, error: "License expired or revoked." }, 403, origin, env);
         }
 
+        // Optional device telemetry from the licensed desktop app. Only update
+        // after the key is valid and the device binding is accepted.
+        const reportedCpu = cleanDeviceText(body.cpu, 120);
+        const reportedWindows = cleanDeviceText(body.windows || body.os, 120);
+
         if (!license.deviceId) {
           license.deviceId = deviceId;
           license.deviceBoundAt = new Date().toISOString();
@@ -229,6 +261,11 @@ export default {
             error: "This license is already activated on another device."
           }, 403, origin, env);
         }
+
+        if (reportedCpu) license.cpu = reportedCpu;
+        if (reportedWindows) license.windows = reportedWindows;
+        license.lastSeen = new Date().toISOString();
+        await env.LICENSE_DB.put(storageKey, JSON.stringify(license));
 
         return json({
           valid: true,
@@ -285,6 +322,7 @@ export default {
 
         const key = generateKey();
         const hash = await hashKey(key);
+        const encryptedKey = await encryptLicenseKey(key, env.SESSION_SECRET);
         const id = crypto.randomUUID();
         const now = new Date();
         const expires = new Date(now.getTime() + days * 86400000);
@@ -295,7 +333,11 @@ export default {
           expiresAt: expires.toISOString(),
           revoked: false,
           deviceId: null,
-          deviceBoundAt: null
+          deviceBoundAt: null,
+          cpu: null,
+          windows: null,
+          lastSeen: null,
+          ...encryptedKey
         };
 
         await env.LICENSE_DB.put("license:" + id, JSON.stringify(record));

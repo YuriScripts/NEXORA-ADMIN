@@ -89,6 +89,19 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div id="createStatus" class="status"></div>
 </div>
 <div class="card">
+<h2>Trial Key Generator</h2>
+<p class="status">Generate giveaway keys for testing only. Trial duration is limited to 1–3 days and does not change your buyer-key generator.</p>
+<input id="trialOwner" maxlength="60" placeholder="Trial recipient / giveaway winner">
+<select id="trialDays" style="width:100%;padding:13px 15px;margin:8px 0;border-radius:10px;border:1px solid #35234e;background:#080610;color:var(--text)">
+<option value="1">1 day trial</option>
+<option value="2">2 days trial</option>
+<option value="3">3 days trial</option>
+</select>
+<button onclick="createTrialLicense()">GENERATE TRIAL KEY</button>
+<div id="trialGeneratedKey" class="keybox hidden"><code id="trialGeneratedKeyText"></code><button class="secondary" onclick="copyTrialKey()">COPY KEY</button></div>
+<div id="trialCreateStatus" class="status"></div>
+</div>
+<div class="card">
 <h2>License Management</h2>
 <p class="status">One license is restricted to one registered device.</p>
 <button onclick="loadLicenses()">REFRESH DATABASE</button>
@@ -100,8 +113,8 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <h2>License Database</h2>
 <div class="tablewrap">
 <table>
-<thead><tr><th>Owner</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
-<tbody id="licenseRows"><tr><td colspan="7">No data loaded.</td></tr></tbody>
+<thead><tr><th>Owner</th><th>Type</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
+<tbody id="licenseRows"><tr><td colspan="8">No data loaded.</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -181,6 +194,7 @@ async function verifySession(){
 }
 
 let lastGeneratedKey="";
+let lastTrialKey="";
 function toggleValidity(){
  const lifetime=document.getElementById("validity").value==="lifetime";
  const days=document.getElementById("days");days.classList.toggle("hidden",lifetime);days.required=!lifetime;
@@ -191,6 +205,7 @@ async function copyText(value,button){
  catch(error){const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
 }
 function copyGeneratedKey(){if(lastGeneratedKey)copyText(lastGeneratedKey,document.querySelector("#generatedKey button"));}
+function copyTrialKey(){if(lastTrialKey)copyText(lastTrialKey,document.querySelector("#trialGeneratedKey button"));}
 
 async function createLicense(){
  try{
@@ -209,6 +224,22 @@ async function createLicense(){
  }catch(error){status("createStatus",error.message);}
 }
 
+async function createTrialLicense(){
+ try{
+  const owner=document.getElementById("trialOwner").value.trim();
+  const days=Number(document.getElementById("trialDays").value);
+  if(!owner)throw new Error("Enter a trial recipient or giveaway name.");
+  if(!Number.isInteger(days)||days<1||days>3)throw new Error("Trial duration must be 1, 2, or 3 days.");
+  const result=await api("/api/licenses","POST",{owner,days,trial:true,lifetime:false});
+  lastTrialKey=result.key||"";
+  document.getElementById("trialGeneratedKeyText").textContent=lastTrialKey;
+  document.getElementById("trialGeneratedKey").classList.remove("hidden");
+  status("trialCreateStatus","TRIAL KEY GENERATED\nDuration: "+days+" day(s)\nExpires: "+new Date(result.license.expiresAt).toLocaleString()+"\nOne device only. Save and share the key securely.");
+  document.getElementById("trialOwner").value="";
+  await loadLicenses();
+ }catch(error){status("trialCreateStatus",error.message);}
+}
+
 async function loadLicenses(){
  try{
   const result=await api("/api/licenses");const licenses=result.licenses||[];const rows=document.getElementById("licenseRows");rows.replaceChildren();
@@ -217,6 +248,7 @@ async function loadLicenses(){
    if(license.status==="active")active++;if(license.deviceBound)bound++;
    const tr=document.createElement("tr");
    const owner=document.createElement("td");owner.textContent=license.owner||"—";
+   const type=document.createElement("td");const typeBadge=document.createElement("span");typeBadge.className="badge unbound";typeBadge.textContent=license.trial?"TRIAL":"STANDARD";type.appendChild(typeBadge);
    const keyCell=document.createElement("td");const keyWrap=document.createElement("div");keyWrap.className="keycell";
    const keyText=document.createElement("span");keyText.className="keytext";keyText.textContent=license.licenseKey||"Unavailable (legacy key)";
    keyWrap.appendChild(keyText);
@@ -239,7 +271,7 @@ async function loadLicenses(){
    }else if(license.status==="revoked"||license.status==="expired"){
     const remove=document.createElement("button");remove.className="danger";remove.textContent="Delete";remove.onclick=()=>deleteLicense(license.id);action.appendChild(remove);
    }else action.textContent="—";
-   tr.append(owner,keyCell,state,expiry,device,info,action);rows.appendChild(tr);
+   tr.append(owner,type,keyCell,state,expiry,device,info,action);rows.appendChild(tr);
   }
   document.getElementById("totalCount").textContent=licenses.length;document.getElementById("activeCount").textContent=active;document.getElementById("deviceCount").textContent=bound;
   status("licenseStatus",licenses.length+" license(s) loaded successfully.");

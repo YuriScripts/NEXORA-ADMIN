@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#05040a">
-<title>NEXORA | Admin Control Center</title>
+<title>NEXORA-ADMIN | Admin Control Center</title>
 <style>
 :root{color-scheme:dark;--bg:#05040a;--panel:#0c0914;--panel2:#100c1c;--line:#2c1b45;--purple:#a855f7;--violet:#7c3aed;--pink:#d946ef;--text:#f5f0ff;--muted:#a99bbd;--glow:0 0 22px rgba(168,85,247,.18)}
 *{box-sizing:border-box}
@@ -51,8 +51,8 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <body>
 <div class="container">
 <header>
-<h1>NEXORA</h1>
-<small>ADMIN CONTROL CENTER / OBSIDIAN</small>
+<h1>NEXORA-ADMIN</h1>
+<small>ADMIN CONTROL CENTER / @serluooo</small>
 </header>
 
 <section id="login" class="card">
@@ -79,6 +79,10 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div class="card">
 <h2>Generate License</h2>
 <input id="owner" maxlength="60" placeholder="License owner">
+<select id="validity" onchange="toggleValidity()" style="width:100%;padding:13px 15px;margin:8px 0;border-radius:10px;border:1px solid #35234e;background:#080610;color:var(--text)">
+<option value="days">Limited validity (days)</option>
+<option value="lifetime">Lifetime / Unlimited days</option>
+</select>
 <input id="days" type="number" min="1" max="3650" placeholder="Validity in days">
 <button onclick="createLicense()">GENERATE LICENSE KEY</button>
 <div id="generatedKey" class="keybox hidden"><code id="generatedKeyText"></code><button class="secondary" onclick="copyGeneratedKey()">COPY KEY</button></div>
@@ -177,6 +181,11 @@ async function verifySession(){
 }
 
 let lastGeneratedKey="";
+function toggleValidity(){
+ const lifetime=document.getElementById("validity").value==="lifetime";
+ const days=document.getElementById("days");days.classList.toggle("hidden",lifetime);days.required=!lifetime;
+}
+toggleValidity();
 async function copyText(value,button){
  try{await navigator.clipboard.writeText(value);if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
  catch(error){const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
@@ -186,13 +195,15 @@ function copyGeneratedKey(){if(lastGeneratedKey)copyText(lastGeneratedKey,docume
 async function createLicense(){
  try{
   const owner=document.getElementById("owner").value.trim();
+  const lifetime=document.getElementById("validity").value==="lifetime";
   const days=Number(document.getElementById("days").value);
-  if(!owner||!Number.isInteger(days)||days<1||days>3650)throw new Error("Enter a valid owner and duration.");
-  const result=await api("/api/licenses","POST",{owner,days});
+  if(!owner)throw new Error("Enter a license owner.");
+  if(!lifetime&&(!Number.isInteger(days)||days<1||days>3650))throw new Error("Enter a validity between 1 and 3650 days.");
+  const result=await api("/api/licenses","POST",{owner,days,lifetime});
   lastGeneratedKey=result.key||"";
   document.getElementById("generatedKeyText").textContent=lastGeneratedKey;
   document.getElementById("generatedKey").classList.remove("hidden");
-  status("createStatus","LICENSE GENERATED\nExpiration: "+new Date(result.license.expiresAt).toLocaleString()+"\nCopy the key and securely deliver it to the owner.");
+  status("createStatus","LICENSE GENERATED\nValidity: "+(lifetime?"LIFETIME / UNLIMITED":"Expires: "+new Date(result.license.expiresAt).toLocaleString())+"\nSave the key securely; it is shown here and in the admin database.");
   document.getElementById("owner").value="";document.getElementById("days").value="";
   await loadLicenses();
  }catch(error){status("createStatus",error.message);}
@@ -214,7 +225,7 @@ async function loadLicenses(){
    const state=document.createElement("td");const badge=document.createElement("span");badge.className="badge";
    if(license.status==="revoked")badge.className+=" revoked";else if(license.status==="expired")badge.className+=" expired";
    badge.textContent=(license.status||"unknown").toUpperCase();state.appendChild(badge);
-   const expiry=document.createElement("td");expiry.textContent=license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—";
+   const expiry=document.createElement("td");expiry.textContent=license.lifetime?"LIFETIME / UNLIMITED":license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—";
    const device=document.createElement("td");const deviceBadge=document.createElement("span");deviceBadge.className="badge unbound";deviceBadge.textContent=license.deviceBound?"BOUND":"NOT BOUND";device.appendChild(deviceBadge);
    const info=document.createElement("td");info.className="deviceinfo";
    const cpu=document.createElement("div");cpu.textContent="CPU: "+(license.cpu||"Not reported");
@@ -225,7 +236,7 @@ async function loadLicenses(){
    if(license.status==="active"){
     const revoke=document.createElement("button");revoke.className="danger";revoke.textContent="Revoke";revoke.onclick=()=>revokeLicense(license.id);action.appendChild(revoke);
     if(license.deviceBound){const reset=document.createElement("button");reset.className="secondary";reset.textContent="Reset Device";reset.onclick=()=>unbindDevice(license.id);action.appendChild(reset);}
-   }else if(license.status==="revoked"){
+   }else if(license.status==="revoked"||license.status==="expired"){
     const remove=document.createElement("button");remove.className="danger";remove.textContent="Delete";remove.onclick=()=>deleteLicense(license.id);action.appendChild(remove);
    }else action.textContent="—";
    tr.append(owner,keyCell,state,expiry,device,info,action);rows.appendChild(tr);
@@ -254,10 +265,10 @@ async function unbindDevice(id){
 }
 
 async function deleteLicense(id){
- if(!confirm("PERMANENTLY DELETE THIS REVOKED LICENSE?\n\nThis action cannot be undone."))return;
+ if(!confirm("PERMANENTLY DELETE THIS EXPIRED OR REVOKED LICENSE?\n\nThis action cannot be undone."))return;
  try{
   await api("/api/licenses/"+encodeURIComponent(id),"DELETE");
-  status("licenseStatus","Revoked license permanently deleted.");
+  status("licenseStatus","License permanently deleted.");
   await loadLicenses();
  }catch(error){status("licenseStatus",error.message);}
 }

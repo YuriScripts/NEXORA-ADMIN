@@ -3,45 +3,56 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#080d18">
+<meta name="theme-color" content="#05040a">
 <title>NEXORA | Admin Control Center</title>
 <style>
+:root{color-scheme:dark;--bg:#05040a;--panel:#0c0914;--panel2:#100c1c;--line:#2c1b45;--purple:#a855f7;--violet:#7c3aed;--pink:#d946ef;--text:#f5f0ff;--muted:#a99bbd;--glow:0 0 22px rgba(168,85,247,.18)}
 *{box-sizing:border-box}
-body{margin:0;background:#080d18;color:#edf3ff;font-family:Arial,sans-serif}
-.container{max-width:1100px;margin:35px auto;padding:20px}
-header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:30px}
-h1{color:#62a5ff;letter-spacing:4px;margin:0}
-h2{font-size:19px}
-.card{background:#111b2d;border:1px solid #263a58;border-radius:15px;padding:24px;margin-bottom:20px}
-input,button{width:100%;padding:14px;margin:8px 0;border-radius:8px;border:1px solid #344a69;background:#0b1424;color:white;font-size:14px}
-button{background:#2477ed;border:0;font-weight:bold;cursor:pointer;transition:.2s}
-button:hover{filter:brightness(1.15)}
-button:disabled{opacity:.5;cursor:not-allowed}
-.secondary{background:#293b55}
-.danger{background:#a93648}
+body{margin:0;background:radial-gradient(ellipse at 12% 0%,rgba(109,40,217,.16),transparent 34%),radial-gradient(ellipse at 90% 20%,rgba(192,38,211,.09),transparent 30%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;min-height:100vh}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(rgba(168,85,247,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(168,85,247,.025) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,black,transparent 80%)}
+.container{position:relative;max-width:1240px;margin:28px auto;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:28px;padding:18px 20px;border:1px solid var(--line);border-radius:18px;background:rgba(12,9,20,.82);box-shadow:var(--glow);backdrop-filter:blur(14px)}
+h1{color:#d8b4fe;letter-spacing:5px;margin:0;text-shadow:0 0 18px rgba(168,85,247,.65);font-size:28px}
+h2{font-size:18px;letter-spacing:.3px;margin:0 0 16px;color:#f3e8ff}
+.card{background:linear-gradient(145deg,rgba(17,12,28,.97),rgba(8,7,14,.97));border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:var(--glow);position:relative;overflow:hidden}
+.card:after{content:"";position:absolute;top:0;left:22px;right:22px;height:1px;background:linear-gradient(90%,transparent,rgba(192,132,252,.55),transparent);pointer-events:none}
+input,button{width:100%;padding:13px 15px;margin:8px 0;border-radius:10px;border:1px solid #35234e;background:#080610;color:var(--text);font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s,transform .2s}
+input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(168,85,247,.14),0 0 18px rgba(168,85,247,.12)}
+input::placeholder{color:#756783}
+button{background:linear-gradient(135deg,#7c3aed,#a855f7 60%,#c026d3);border:1px solid rgba(216,180,254,.25);font-weight:800;letter-spacing:.5px;cursor:pointer;box-shadow:0 0 18px rgba(124,58,237,.22);color:white}
+button:hover{filter:brightness(1.13);box-shadow:0 0 25px rgba(168,85,247,.38);transform:translateY(-1px)}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.secondary{background:#171022;border:1px solid #4c2e70;color:#d8b4fe;box-shadow:none}
+.danger{background:linear-gradient(135deg,#7f1d1d,#be123c);border:1px solid #9f1239;box-shadow:0 0 12px rgba(190,18,60,.15)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}
 .hidden{display:none!important}
-.status{color:#91baff;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
-small{color:#91a6c4}
-.tablewrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;margin-top:15px;min-width:650px}
-td,th{padding:12px;text-align:left;border-bottom:1px solid #293b55;font-size:13px}
-th{color:#83b7ff}
-td button{padding:9px;font-size:12px}
-.badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:11px;background:#183e30;color:#79e4ad}
-.revoked{background:#4a222b;color:#ff9b9b}
-.expired{background:#493c1d;color:#f8d58a}
-.unbound{background:#263b59;color:#9ecaff}
-#dashboard{animation:fade .3s ease}
-@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:600px){.container{padding:12px;margin:15px auto}.card{padding:17px}header{align-items:flex-start;flex-direction:column}}
+.status{color:#c4b5fd;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
+small{color:var(--muted)}
+.metric{padding:14px 16px;border:1px solid #291a3d;border-radius:13px;background:rgba(6,5,12,.6)}
+.metric h2{font-size:30px;margin:8px 0 0;color:#e9d5ff;text-shadow:0 0 14px rgba(168,85,247,.28)}
+.tablewrap{overflow-x:auto;border:1px solid #281a3b;border-radius:12px}
+table{width:100%;border-collapse:collapse;margin:0;min-width:1050px;background:rgba(5,4,10,.35)}
+td,th{padding:13px;text-align:left;border-bottom:1px solid #21162f;font-size:12px;vertical-align:middle}
+th{color:#d8b4fe;background:#130d20;font-size:11px;letter-spacing:.8px;text-transform:uppercase;white-space:nowrap}
+tbody tr:hover{background:rgba(168,85,247,.055)}
+td button{padding:8px 10px;font-size:11px;margin:4px 0}
+.badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:10px;letter-spacing:.5px;background:#183e30;color:#79e4ad;border:1px solid rgba(121,228,173,.12);white-space:nowrap}
+.revoked{background:#3a1425;color:#fda4af;border-color:#6b1837}.expired{background:#392a12;color:#fcd34d;border-color:#624517}.unbound{background:#211532;color:#d8b4fe;border-color:#4c2e70}
+.keycell{display:flex;align-items:center;gap:8px;min-width:220px}.keytext{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9d5ff;overflow-wrap:anywhere;max-width:230px}.copykey{width:auto;min-width:62px;padding:7px 10px;margin:0;font-size:10px}
+.deviceinfo{line-height:1.6;min-width:155px;color:#c4b5fd}.subtle{color:#8e7ba8;font-size:11px}
+.keybox{margin-top:12px;padding:13px;border:1px solid #4c2e70;background:rgba(124,58,237,.08);border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.keybox code{flex:1;min-width:180px;color:#f3e8ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;font-size:13px}
+.keybox button{width:auto;min-width:95px;margin:0}
+#dashboard{animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:600px){.container{padding:12px;margin:12px auto}header{align-items:flex-start;flex-direction:column;padding:16px}.card{padding:17px}h1{font-size:24px}.metric h2{font-size:25px}}
 </style>
 </head>
 <body>
 <div class="container">
 <header>
 <h1>NEXORA</h1>
-<small>ADMIN CONTROL CENTER / V2.1</small>
+<small>ADMIN CONTROL CENTER / OBSIDIAN</small>
 </header>
 
 <section id="login" class="card">
@@ -57,9 +68,9 @@ td button{padding:9px;font-size:12px}
 <h2>Dashboard Overview</h2>
 <p class="status">Administrator authenticated.</p>
 <div class="grid">
-<div><small>Total Licenses</small><h2 id="totalCount">0</h2></div>
-<div><small>Active Licenses</small><h2 id="activeCount">0</h2></div>
-<div><small>Bound Devices</small><h2 id="deviceCount">0</h2></div>
+<div class="metric"><small>Total Licenses</small><h2 id="totalCount">0</h2></div>
+<div class="metric"><small>Active Licenses</small><h2 id="activeCount">0</h2></div>
+<div class="metric"><small>Bound Devices</small><h2 id="deviceCount">0</h2></div>
 </div>
 <button class="secondary" onclick="logout()">LOGOUT</button>
 </div>
@@ -70,6 +81,7 @@ td button{padding:9px;font-size:12px}
 <input id="owner" maxlength="60" placeholder="License owner">
 <input id="days" type="number" min="1" max="3650" placeholder="Validity in days">
 <button onclick="createLicense()">GENERATE LICENSE KEY</button>
+<div id="generatedKey" class="keybox hidden"><code id="generatedKeyText"></code><button class="secondary" onclick="copyGeneratedKey()">COPY KEY</button></div>
 <div id="createStatus" class="status"></div>
 </div>
 <div class="card">
@@ -84,8 +96,8 @@ td button{padding:9px;font-size:12px}
 <h2>License Database</h2>
 <div class="tablewrap">
 <table>
-<thead><tr><th>Owner</th><th>Status</th><th>Expiration</th><th>Device</th><th>Actions</th></tr></thead>
-<tbody id="licenseRows"><tr><td colspan="5">No data loaded.</td></tr></tbody>
+<thead><tr><th>Owner</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
+<tbody id="licenseRows"><tr><td colspan="7">No data loaded.</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -164,88 +176,61 @@ async function verifySession(){
  }
 }
 
+let lastGeneratedKey="";
+async function copyText(value,button){
+ try{await navigator.clipboard.writeText(value);if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
+ catch(error){const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
+}
+function copyGeneratedKey(){if(lastGeneratedKey)copyText(lastGeneratedKey,document.querySelector("#generatedKey button"));}
+
 async function createLicense(){
  try{
   const owner=document.getElementById("owner").value.trim();
   const days=Number(document.getElementById("days").value);
-  if(!owner||!Number.isInteger(days)||days<1||days>3650)
-   throw new Error("Enter a valid owner and duration.");
-
+  if(!owner||!Number.isInteger(days)||days<1||days>3650)throw new Error("Enter a valid owner and duration.");
   const result=await api("/api/licenses","POST",{owner,days});
-  status("createStatus","LICENSE GENERATED\n\n"+result.key+"\n\nExpiration: "+result.license.expiresAt+"\n\nCopy and securely deliver this key.");
-  document.getElementById("owner").value="";
-  document.getElementById("days").value="";
+  lastGeneratedKey=result.key||"";
+  document.getElementById("generatedKeyText").textContent=lastGeneratedKey;
+  document.getElementById("generatedKey").classList.remove("hidden");
+  status("createStatus","LICENSE GENERATED\nExpiration: "+new Date(result.license.expiresAt).toLocaleString()+"\nCopy the key and securely deliver it to the owner.");
+  document.getElementById("owner").value="";document.getElementById("days").value="";
   await loadLicenses();
  }catch(error){status("createStatus",error.message);}
 }
 
 async function loadLicenses(){
  try{
-  const result=await api("/api/licenses");
-  const licenses=result.licenses||[];
-  const rows=document.getElementById("licenseRows");
-  rows.replaceChildren();
-
+  const result=await api("/api/licenses");const licenses=result.licenses||[];const rows=document.getElementById("licenseRows");rows.replaceChildren();
   let active=0,bound=0;
-
   for(const license of licenses){
-   if(license.status==="active")active++;
-   if(license.deviceBound)bound++;
-
+   if(license.status==="active")active++;if(license.deviceBound)bound++;
    const tr=document.createElement("tr");
-   const owner=document.createElement("td");
-   owner.textContent=license.owner;
-
-   const state=document.createElement("td");
-   const badge=document.createElement("span");
-   badge.className="badge";
-   if(license.status==="revoked")badge.className+=" revoked";
-   else if(license.status==="expired")badge.className+=" expired";
-   badge.textContent=license.status.toUpperCase();
-   state.appendChild(badge);
-
-   const expiry=document.createElement("td");
-   expiry.textContent=new Date(license.expiresAt).toLocaleDateString();
-
-   const device=document.createElement("td");
-   const deviceBadge=document.createElement("span");
-   deviceBadge.className="badge unbound";
-   deviceBadge.textContent=license.deviceBound?"BOUND":"NOT BOUND";
-   device.appendChild(deviceBadge);
-
+   const owner=document.createElement("td");owner.textContent=license.owner||"—";
+   const keyCell=document.createElement("td");const keyWrap=document.createElement("div");keyWrap.className="keycell";
+   const keyText=document.createElement("span");keyText.className="keytext";keyText.textContent=license.licenseKey||"Unavailable (legacy key)";
+   keyWrap.appendChild(keyText);
+   if(license.licenseKey){const copy=document.createElement("button");copy.className="secondary copykey";copy.textContent="COPY";copy.onclick=()=>copyText(license.licenseKey,copy);keyWrap.appendChild(copy);}
+   keyCell.appendChild(keyWrap);
+   const state=document.createElement("td");const badge=document.createElement("span");badge.className="badge";
+   if(license.status==="revoked")badge.className+=" revoked";else if(license.status==="expired")badge.className+=" expired";
+   badge.textContent=(license.status||"unknown").toUpperCase();state.appendChild(badge);
+   const expiry=document.createElement("td");expiry.textContent=license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—";
+   const device=document.createElement("td");const deviceBadge=document.createElement("span");deviceBadge.className="badge unbound";deviceBadge.textContent=license.deviceBound?"BOUND":"NOT BOUND";device.appendChild(deviceBadge);
+   const info=document.createElement("td");info.className="deviceinfo";
+   const cpu=document.createElement("div");cpu.textContent="CPU: "+(license.cpu||"Not reported");
+   const os=document.createElement("div");os.textContent="Windows: "+(license.windows||"Not reported");
+   const seen=document.createElement("div");seen.className="subtle";seen.textContent=license.lastSeen?"Last seen: "+new Date(license.lastSeen).toLocaleString():"Last seen: —";
+   info.append(cpu,os,seen);
    const action=document.createElement("td");
-
    if(license.status==="active"){
-    const revoke=document.createElement("button");
-    revoke.className="danger";
-    revoke.textContent="Revoke";
-    revoke.onclick=()=>revokeLicense(license.id);
-    action.appendChild(revoke);
-
-    if(license.deviceBound){
-     const reset=document.createElement("button");
-     reset.className="secondary";
-     reset.textContent="Reset Device";
-     reset.onclick=()=>unbindDevice(license.id);
-     action.appendChild(reset);
-    }
+    const revoke=document.createElement("button");revoke.className="danger";revoke.textContent="Revoke";revoke.onclick=()=>revokeLicense(license.id);action.appendChild(revoke);
+    if(license.deviceBound){const reset=document.createElement("button");reset.className="secondary";reset.textContent="Reset Device";reset.onclick=()=>unbindDevice(license.id);action.appendChild(reset);}
    }else if(license.status==="revoked"){
-    const remove=document.createElement("button");
-    remove.className="danger";
-    remove.textContent="Delete";
-    remove.onclick=()=>deleteLicense(license.id);
-    action.appendChild(remove);
-   }else{
-    action.textContent="—";
-   }
-
-   tr.append(owner,state,expiry,device,action);
-   rows.appendChild(tr);
+    const remove=document.createElement("button");remove.className="danger";remove.textContent="Delete";remove.onclick=()=>deleteLicense(license.id);action.appendChild(remove);
+   }else action.textContent="—";
+   tr.append(owner,keyCell,state,expiry,device,info,action);rows.appendChild(tr);
   }
-
-  document.getElementById("totalCount").textContent=licenses.length;
-  document.getElementById("activeCount").textContent=active;
-  document.getElementById("deviceCount").textContent=bound;
+  document.getElementById("totalCount").textContent=licenses.length;document.getElementById("activeCount").textContent=active;document.getElementById("deviceCount").textContent=bound;
   status("licenseStatus",licenses.length+" license(s) loaded successfully.");
  }catch(error){status("licenseStatus",error.message);}
 }

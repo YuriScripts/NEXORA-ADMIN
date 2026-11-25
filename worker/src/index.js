@@ -311,14 +311,18 @@ export default {
       if (request.method === "POST" && path === "/api/licenses") {
         const body = await request.json();
         const owner = String(body.owner || "").trim();
-        const lifetime = body.lifetime === true;
+        const trial = body.trial === true;
+        const lifetime = !trial && body.lifetime === true;
         const days = Number(body.days);
 
         if (!owner || owner.length > 60) {
           return json({ error: "Invalid license owner." }, 400, origin, env);
         }
 
-        if (!lifetime && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+        if (trial && (!Number.isInteger(days) || days < 1 || days > 3)) {
+          return json({ error: "Trial validity must be 1, 2, or 3 days." }, 400, origin, env);
+        }
+        if (!trial && !lifetime && (!Number.isInteger(days) || days < 1 || days > 3650)) {
           return json({ error: "Validity must be 1–3650 days, or choose lifetime." }, 400, origin, env);
         }
 
@@ -330,7 +334,7 @@ export default {
         const expires = lifetime ? null : new Date(now.getTime() + days * 86400000);
 
         const record = {
-          id, owner, lifetime,
+          id, owner, trial, lifetime,
           createdAt: now.toISOString(),
           expiresAt: expires ? expires.toISOString() : null,
           revoked: false,

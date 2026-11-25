@@ -135,7 +135,14 @@ async function readLicenses(env) {
     const expired = !value.lifetime && (!value.expiresAt || Date.now() >= Date.parse(value.expiresAt));
     const status = value.revoked ? "revoked" : expired ? "expired" : "active";
     const licenseKey = await decryptLicenseKey(value, env.SESSION_SECRET);
-    return { ...value, keyEncrypted: undefined, keyIv: undefined, licenseKey, status, deviceBound: Boolean(value.deviceId) };
+    const boundDevices = value.trial === true
+      ? (Array.isArray(value.deviceIds) ? value.deviceIds : (value.deviceId ? [value.deviceId] : []))
+      : (value.deviceId ? [value.deviceId] : []);
+    const deviceLimit = value.trial === true
+      ? Math.min(1000, Math.max(1, Number.isInteger(value.deviceLimit) ? value.deviceLimit : 1))
+      : 1;
+    return { ...value, keyEncrypted: undefined, keyIv: undefined, licenseKey, status,
+      deviceBound: boundDevices.length > 0, boundDeviceCount: boundDevices.length, deviceLimit };
   }));
   return records.filter(Boolean).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -246,20 +253,36 @@ export default {
           return json({ valid: false, error: "License expired or revoked." }, 403, origin, env);
         }
 
-        // Optional device telemetry from the licensed desktop app. Only update
-        // after the key is valid and the device binding is accepted.
+        // Trial keys support a configurable device pool. Standard keys retain
+        // their original one-device binding behavior.
         const reportedCpu = cleanDeviceText(body.cpu, 120);
         const reportedWindows = cleanDeviceText(body.windows || body.os, 120);
 
-        if (!license.deviceId) {
-          license.deviceId = deviceId;
-          license.deviceBoundAt = new Date().toISOString();
-          await env.LICENSE_DB.put(storageKey, JSON.stringify(license));
-        } else if (license.deviceId !== deviceId) {
-          return json({
-            valid: false,
-            error: "This license is already activated on another device."
-          }, 403, origin, env);
+        if (license.trial === true) {
+          const devices = Array.isArray(license.deviceIds)
+            ? license.deviceIds
+            : (license.deviceId ? [license.deviceId] : []);
+          const limit = Math.min(1000, Math.max(1,
+            Number.isInteger(license.deviceLimit) ? license.deviceLimit : 1));
+          if (!devices.includes(deviceId)) {
+            if (devices.length >= limit) {
+              return json({ valid: false,
+                error: `This trial key has reached its ${limit}-device limit.`
+              }, 403, origin, env);
+            }
+            devices.push(deviceId);
+            license.deviceIds = devices;
+            license.deviceBoundAt = license.deviceBoundAt || new Date().toISOString();
+          }
+        } else {
+          if (!license.deviceId) {
+            license.deviceId = deviceId;
+            license.deviceBoundAt = new Date().toISOString();
+          } else if (license.deviceId !== deviceId) {
+            return json({ valid: false,
+              error: "This license is already activated on another device."
+            }, 403, origin, env);
+          }
         }
 
         if (reportedCpu) license.cpu = reportedCpu;
@@ -271,7 +294,12 @@ export default {
           valid: true,
           owner: license.owner,
           expiresAt: license.expiresAt,
-          deviceBound: true
+          deviceBound: true,
+          boundDeviceCount: license.trial === true
+            ? (Array.isArray(license.deviceIds) ? license.deviceIds.length : (license.deviceId ? 1 : 0))
+            : 1,
+          deviceLimit: license.trial === true
+            ? (Number.isInteger(license.deviceLimit) ? license.deviceLimit : 1) : 1
         }, 200, origin, env);
       }
 
@@ -314,6 +342,8 @@ export default {
         const trial = body.trial === true;
         const lifetime = !trial && body.lifetime === true;
         const days = Number(body.days);
+        const requestedDeviceLimit = body.deviceLimit === undefined ? 1 : Number(body.deviceLimit);
+        const deviceLimit = trial ? requestedDeviceLimit : 1;
 
         if (!owner || owner.length > 60) {
           return json({ error: "Invalid license owner." }, 400, origin, env);
@@ -321,6 +351,9 @@ export default {
 
         if (trial && (!Number.isInteger(days) || days < 1 || days > 3)) {
           return json({ error: "Trial validity must be 1, 2, or 3 days." }, 400, origin, env);
+        }
+        if (trial && (!Number.isInteger(deviceLimit) || deviceLimit < 1 || deviceLimit > 1000)) {
+          return json({ error: "Trial device limit must be between 1 and 1000." }, 400, origin, env);
         }
         if (!trial && !lifetime && (!Number.isInteger(days) || days < 1 || days > 3650)) {
           return json({ error: "Validity must be 1–3650 days, or choose lifetime." }, 400, origin, env);
@@ -339,6 +372,8 @@ export default {
           expiresAt: expires ? expires.toISOString() : null,
           revoked: false,
           deviceId: null,
+          deviceIds: trial ? [] : undefined,
+          deviceLimit: trial ? deviceLimit : 1,
           deviceBoundAt: null,
           cpu: null,
           windows: null,
@@ -378,6 +413,7 @@ export default {
             return json({ error: "Cannot unbind a revoked license." }, 409, origin, env);
           }
           record.deviceId = null;
+          if (record.trial === true) record.deviceIds = [];
           record.deviceBoundAt = null;
           record.deviceUnboundAt = new Date().toISOString();
         }

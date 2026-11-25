@@ -52,7 +52,7 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div class="container">
 <header>
 <h1>NEXORA-ADMIN</h1>
-<small>ADMIN CONTROL CENTER / @serluooo</small>
+<small>ADMIN CONTROL CENTER / OBSIDIAN</small>
 </header>
 
 <section id="login" class="card">
@@ -90,8 +90,10 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 </div>
 <div class="card">
 <h2>Trial Key Generator</h2>
-<p class="status">Generate giveaway keys for testing only. Trial duration is limited to 1–3 days and does not change your buyer-key generator.</p>
+<p class="status">Generate giveaway keys for testing only. Choose a 1–3 day duration and bind the key to 1–1,000 devices. Buyer-key settings remain unchanged.</p>
 <input id="trialOwner" maxlength="60" placeholder="Trial recipient / giveaway winner">
+<label for="trialDeviceLimit" style="display:block;color:var(--muted);font-size:12px;margin:8px 0 2px">Maximum device bindings (1–1,000)</label>
+<input id="trialDeviceLimit" type="number" min="1" max="1000" step="1" value="1" placeholder="Maximum devices">
 <select id="trialDays" style="width:100%;padding:13px 15px;margin:8px 0;border-radius:10px;border:1px solid #35234e;background:#080610;color:var(--text)">
 <option value="1">1 day trial</option>
 <option value="2">2 days trial</option>
@@ -113,7 +115,7 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <h2>License Database</h2>
 <div class="tablewrap">
 <table>
-<thead><tr><th>Owner</th><th>Type</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
+<thead><tr><th>Owner</th><th>Type</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device Bindings</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
 <tbody id="licenseRows"><tr><td colspan="8">No data loaded.</td></tr></tbody>
 </table>
 </div>
@@ -228,14 +230,17 @@ async function createTrialLicense(){
  try{
   const owner=document.getElementById("trialOwner").value.trim();
   const days=Number(document.getElementById("trialDays").value);
+  const deviceLimit=Number(document.getElementById("trialDeviceLimit").value);
   if(!owner)throw new Error("Enter a trial recipient or giveaway name.");
   if(!Number.isInteger(days)||days<1||days>3)throw new Error("Trial duration must be 1, 2, or 3 days.");
-  const result=await api("/api/licenses","POST",{owner,days,trial:true,lifetime:false});
+  if(!Number.isInteger(deviceLimit)||deviceLimit<1||deviceLimit>1000)throw new Error("Device limit must be a whole number from 1 to 1,000.");
+  const result=await api("/api/licenses","POST",{owner,days,trial:true,lifetime:false,deviceLimit});
   lastTrialKey=result.key||"";
   document.getElementById("trialGeneratedKeyText").textContent=lastTrialKey;
   document.getElementById("trialGeneratedKey").classList.remove("hidden");
-  status("trialCreateStatus","TRIAL KEY GENERATED\nDuration: "+days+" day(s)\nExpires: "+new Date(result.license.expiresAt).toLocaleString()+"\nOne device only. Save and share the key securely.");
+  status("trialCreateStatus","TRIAL KEY GENERATED\nDuration: "+days+" day(s)\nDevice limit: "+deviceLimit+"\nExpires: "+new Date(result.license.expiresAt).toLocaleString()+"\nSave and share the key securely.");
   document.getElementById("trialOwner").value="";
+  document.getElementById("trialDeviceLimit").value="1";
   await loadLicenses();
  }catch(error){status("trialCreateStatus",error.message);}
 }
@@ -258,7 +263,10 @@ async function loadLicenses(){
    if(license.status==="revoked")badge.className+=" revoked";else if(license.status==="expired")badge.className+=" expired";
    badge.textContent=(license.status||"unknown").toUpperCase();state.appendChild(badge);
    const expiry=document.createElement("td");expiry.textContent=license.lifetime?"LIFETIME / UNLIMITED":license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—";
-   const device=document.createElement("td");const deviceBadge=document.createElement("span");deviceBadge.className="badge unbound";deviceBadge.textContent=license.deviceBound?"BOUND":"NOT BOUND";device.appendChild(deviceBadge);
+   const device=document.createElement("td");const deviceBadge=document.createElement("span");deviceBadge.className="badge unbound";
+   const boundCount=Number.isInteger(license.boundDeviceCount)?license.boundDeviceCount:(license.deviceBound?1:0);
+   const deviceLimit=license.trial?(Number.isInteger(license.deviceLimit)?license.deviceLimit:1):1;
+   deviceBadge.textContent=boundCount+" / "+deviceLimit+" BOUND";device.appendChild(deviceBadge);
    const info=document.createElement("td");info.className="deviceinfo";
    const cpu=document.createElement("div");cpu.textContent="CPU: "+(license.cpu||"Not reported");
    const os=document.createElement("div");os.textContent="Windows: "+(license.windows||"Not reported");

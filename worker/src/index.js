@@ -132,7 +132,7 @@ async function readLicenses(env) {
   const records = await Promise.all(result.keys.map(async entry => {
     const value = await env.LICENSE_DB.get(entry.name, "json");
     if (!value) return null;
-    const expired = Date.now() >= Date.parse(value.expiresAt);
+    const expired = !value.lifetime && (!value.expiresAt || Date.now() >= Date.parse(value.expiresAt));
     const status = value.revoked ? "revoked" : expired ? "expired" : "active";
     const licenseKey = await decryptLicenseKey(value, env.SESSION_SECRET);
     return { ...value, keyEncrypted: undefined, keyIv: undefined, licenseKey, status, deviceBound: Boolean(value.deviceId) };
@@ -146,8 +146,8 @@ function validDeviceId(value) {
 
 function validLicense(record) {
   return Boolean(record && !record.revoked &&
-    Number.isFinite(Date.parse(record.expiresAt)) &&
-    Date.now() < Date.parse(record.expiresAt));
+    (record.lifetime === true || (Number.isFinite(Date.parse(record.expiresAt)) &&
+    Date.now() < Date.parse(record.expiresAt))));
 }
 
 async function deleteHashMappings(env, id) {
@@ -288,8 +288,9 @@ export default {
 
         if (!record) return json({ error: "License not found." }, 404, origin, env);
 
-        if (!record.revoked) {
-          return json({ error: "Revoke this license before deleting it." }, 409, origin, env);
+        const expired = !record.lifetime && (!record.expiresAt || Date.now() >= Date.parse(record.expiresAt));
+        if (!record.revoked && !expired) {
+          return json({ error: "Only revoked or expired licenses can be deleted." }, 409, origin, env);
         }
 
         await deleteHashMappings(env, id);
@@ -297,7 +298,7 @@ export default {
 
         return json({
           success: true,
-          message: "Revoked license permanently deleted."
+          message: "License permanently deleted."
         }, 200, origin, env);
       }
 
@@ -310,14 +311,15 @@ export default {
       if (request.method === "POST" && path === "/api/licenses") {
         const body = await request.json();
         const owner = String(body.owner || "").trim();
+        const lifetime = body.lifetime === true;
         const days = Number(body.days);
 
         if (!owner || owner.length > 60) {
           return json({ error: "Invalid license owner." }, 400, origin, env);
         }
 
-        if (!Number.isInteger(days) || days < 1 || days > 3650) {
-          return json({ error: "Validity must be 1–3650 days." }, 400, origin, env);
+        if (!lifetime && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+          return json({ error: "Validity must be 1–3650 days, or choose lifetime." }, 400, origin, env);
         }
 
         const key = generateKey();
@@ -325,12 +327,12 @@ export default {
         const encryptedKey = await encryptLicenseKey(key, env.SESSION_SECRET);
         const id = crypto.randomUUID();
         const now = new Date();
-        const expires = new Date(now.getTime() + days * 86400000);
+        const expires = lifetime ? null : new Date(now.getTime() + days * 86400000);
 
         const record = {
-          id, owner,
+          id, owner, lifetime,
           createdAt: now.toISOString(),
-          expiresAt: expires.toISOString(),
+          expiresAt: expires ? expires.toISOString() : null,
           revoked: false,
           deviceId: null,
           deviceBoundAt: null,

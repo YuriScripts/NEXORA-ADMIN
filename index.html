@@ -24,28 +24,37 @@ button:hover{filter:brightness(1.13);box-shadow:0 0 25px rgba(168,85,247,.38);tr
 button:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .secondary{background:#171022;border:1px solid #4c2e70;color:#d8b4fe;box-shadow:none}
 .danger{background:linear-gradient(135deg,#7f1d1d,#be123c);border:1px solid #9f1239;box-shadow:0 0 12px rgba(190,18,60,.15)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}
 .hidden{display:none!important}
 .status{color:#c4b5fd;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.65}
 small{color:var(--muted)}
 .metric{padding:14px 16px;border:1px solid #291a3d;border-radius:13px;background:rgba(6,5,12,.6)}
 .metric h2{font-size:30px;margin:8px 0 0;color:#e9d5ff;text-shadow:0 0 14px rgba(168,85,247,.28)}
 .tablewrap{overflow-x:auto;border:1px solid #281a3b;border-radius:12px}
-table{width:100%;border-collapse:collapse;margin:0;min-width:1050px;background:rgba(5,4,10,.35)}
+table{width:100%;border-collapse:collapse;margin:0;min-width:1180px;background:rgba(5,4,10,.35)}
 td,th{padding:13px;text-align:left;border-bottom:1px solid #21162f;font-size:12px;vertical-align:middle}
 th{color:#d8b4fe;background:#130d20;font-size:11px;letter-spacing:.8px;text-transform:uppercase;white-space:nowrap}
 tbody tr:hover{background:rgba(168,85,247,.055)}
 td button{padding:8px 10px;font-size:11px;margin:4px 0}
 .badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:10px;letter-spacing:.5px;background:#183e30;color:#79e4ad;border:1px solid rgba(121,228,173,.12);white-space:nowrap}
-.revoked{background:#3a1425;color:#fda4af;border-color:#6b1837}.expired{background:#392a12;color:#fcd34d;border-color:#624517}.unbound{background:#211532;color:#d8b4fe;border-color:#4c2e70}
-.keycell{display:flex;align-items:center;gap:8px;min-width:220px}.keytext{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9d5ff;overflow-wrap:anywhere;max-width:230px}.copykey{width:auto;min-width:62px;padding:7px 10px;margin:0;font-size:10px}
-.deviceinfo{line-height:1.6;min-width:155px;color:#c4b5fd}.subtle{color:#8e7ba8;font-size:11px}
+.revoked{background:#3a1425;color:#fda4af;border-color:#6b1837}
+.expired{background:#392a12;color:#fcd34d;border-color:#624517}
+.unbound{background:#211532;color:#d8b4fe;border-color:#4c2e70}
+.offline{background:#211532;color:#c4b5fd;border-color:#4c2e70}
+.keycell{display:flex;align-items:center;gap:8px;min-width:220px}
+.keytext{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9d5ff;overflow-wrap:anywhere;max-width:230px}
+.copykey{width:auto;min-width:62px;padding:7px 10px;margin:0;font-size:10px}
+.deviceinfo{line-height:1.6;min-width:175px;color:#c4b5fd}
+.subtle{color:#8e7ba8;font-size:11px}
 .keybox{margin-top:12px;padding:13px;border:1px solid #4c2e70;background:rgba(124,58,237,.08);border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .keybox code{flex:1;min-width:180px;color:#f3e8ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;font-size:13px}
 .keybox button{width:auto;min-width:95px;margin:0}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toolbar button{width:auto;min-width:180px}
+select{font:inherit}
 #dashboard{animation:fade .35s ease}
 @keyframes fade{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:600px){.container{padding:12px;margin:12px auto}header{align-items:flex-start;flex-direction:column;padding:16px}.card{padding:17px}h1{font-size:24px}.metric h2{font-size:25px}}
+@media(max-width:600px){.container{padding:12px;margin:12px auto}header{align-items:flex-start;flex-direction:column;padding:16px}.card{padding:17px}h1{font-size:24px}.metric h2{font-size:25px}.toolbar button{width:100%}}
 </style>
 </head>
 <body>
@@ -70,6 +79,7 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div class="grid">
 <div class="metric"><small>Total Licenses</small><h2 id="totalCount">0</h2></div>
 <div class="metric"><small>Active Licenses</small><h2 id="activeCount">0</h2></div>
+<div class="metric"><small>Online Users</small><h2 id="onlineCount">0</h2></div>
 <div class="metric"><small>Bound Devices</small><h2 id="deviceCount">0</h2></div>
 </div>
 <button class="secondary" onclick="logout()">LOGOUT</button>
@@ -88,6 +98,7 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div id="generatedKey" class="keybox hidden"><code id="generatedKeyText"></code><button class="secondary" onclick="copyGeneratedKey()">COPY KEY</button></div>
 <div id="createStatus" class="status"></div>
 </div>
+
 <div class="card">
 <h2>Trial Key Generator</h2>
 <p class="status">Generate giveaway keys for testing only. Choose a 1–3 day duration and bind the key to 1–1,000 devices. Buyer-key settings remain unchanged.</p>
@@ -103,20 +114,24 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 <div id="trialGeneratedKey" class="keybox hidden"><code id="trialGeneratedKeyText"></code><button class="secondary" onclick="copyTrialKey()">COPY KEY</button></div>
 <div id="trialCreateStatus" class="status"></div>
 </div>
+
 <div class="card">
 <h2>License Management</h2>
-<p class="status">One license is restricted to one registered device.</p>
-<button onclick="loadLicenses()">REFRESH DATABASE</button>
+<p class="status">Standard licenses remain restricted to one registered device. Trial keys support their configured device limit.</p>
+<div class="toolbar">
+<button class="secondary" onclick="loadLicenses()">REFRESH DATABASE</button>
+</div>
 <div id="licenseStatus" class="status">Waiting for database...</div>
 </div>
 </div>
 
 <div class="card">
 <h2>License Database</h2>
+<p class="status">Online means a valid, bound NEXORA client has sent a heartbeat within the last 90 seconds. Status refreshes every 30 seconds.</p>
 <div class="tablewrap">
 <table>
-<thead><tr><th>Owner</th><th>Type</th><th>License Key</th><th>Status</th><th>Expiration</th><th>Device Bindings</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
-<tbody id="licenseRows"><tr><td colspan="8">No data loaded.</td></tr></tbody>
+<thead><tr><th>Owner</th><th>Type</th><th>License Key</th><th>License Status</th><th>Online Status</th><th>Expiration</th><th>Device Bindings</th><th>CPU / Windows</th><th>Actions</th></tr></thead>
+<tbody id="licenseRows"><tr><td colspan="9">No data loaded.</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -127,70 +142,64 @@ td button{padding:8px 10px;font-size:11px;margin:4px 0}
 "use strict";
 
 const API="https://nexora-admin-api.creyyllaguno.workers.dev";
+const REFRESH_INTERVAL_MS=30000;
 let token=sessionStorage.getItem("nexora_session");
+let refreshTimer=null;
+let loadingLicenses=false;
 
 async function api(path,method="GET",body=null){
  const headers={};
  if(body!==null)headers["Content-Type"]="application/json";
  if(token)headers.Authorization="Bearer "+token;
-
- const response=await fetch(API+path,{
-  method,headers,body:body===null?null:JSON.stringify(body)
- });
+ const response=await fetch(API+path,{method,headers,body:body===null?null:JSON.stringify(body),cache:"no-store"});
  const data=await response.json().catch(()=>({error:"Invalid server response."}));
-
  if(!response.ok){
-  if(response.status===401){
-   token=null;
-   sessionStorage.removeItem("nexora_session");
-  }
+  if(response.status===401){token=null;sessionStorage.removeItem("nexora_session");}
   throw new Error(data.error||"HTTP "+response.status);
  }
  return data;
 }
-
-function status(id,message){
- document.getElementById(id).textContent=message;
-}
+function status(id,message){document.getElementById(id).textContent=message;}
 function showDashboard(){
  document.getElementById("login").classList.add("hidden");
  document.getElementById("dashboard").classList.remove("hidden");
+ startAutoRefresh();
 }
 function showLogin(){
+ stopAutoRefresh();
  document.getElementById("login").classList.remove("hidden");
  document.getElementById("dashboard").classList.add("hidden");
+}
+function startAutoRefresh(){
+ stopAutoRefresh();
+ refreshTimer=setInterval(()=>{
+  if(token&&!document.getElementById("dashboard").classList.contains("hidden"))loadLicenses(true);
+ },REFRESH_INTERVAL_MS);
+}
+function stopAutoRefresh(){
+ if(refreshTimer!==null){clearInterval(refreshTimer);refreshTimer=null;}
 }
 
 async function login(){
  const button=document.getElementById("loginBtn");
  const password=document.getElementById("password").value;
  if(!password){status("loginStatus","Enter administrator password.");return;}
-
- button.disabled=true;
- status("loginStatus","Authenticating...");
+ button.disabled=true;status("loginStatus","Authenticating...");
  try{
   const result=await api("/api/login","POST",{password});
   if(!result.token)throw new Error("Missing session token.");
-  token=result.token;
-  sessionStorage.setItem("nexora_session",token);
+  token=result.token;sessionStorage.setItem("nexora_session",token);
   document.getElementById("password").value="";
   await verifySession();
  }catch(error){
-  token=null;
-  sessionStorage.removeItem("nexora_session");
+  token=null;sessionStorage.removeItem("nexora_session");
   status("loginStatus",error.message);
  }finally{button.disabled=false;}
 }
-
 async function verifySession(){
- try{
-  await api("/api/admin/me");
-  showDashboard();
-  await loadLicenses();
- }catch(error){
-  token=null;
-  sessionStorage.removeItem("nexora_session");
-  showLogin();
+ try{await api("/api/admin/me");showDashboard();await loadLicenses();}
+ catch(error){
+  token=null;sessionStorage.removeItem("nexora_session");showLogin();
   status("loginStatus","Session verification failed: "+error.message);
  }
 }
@@ -199,12 +208,18 @@ let lastGeneratedKey="";
 let lastTrialKey="";
 function toggleValidity(){
  const lifetime=document.getElementById("validity").value==="lifetime";
- const days=document.getElementById("days");days.classList.toggle("hidden",lifetime);days.required=!lifetime;
+ const days=document.getElementById("days");
+ days.classList.toggle("hidden",lifetime);days.required=!lifetime;
 }
 toggleValidity();
+
 async function copyText(value,button){
- try{await navigator.clipboard.writeText(value);if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
- catch(error){const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}}
+ try{await navigator.clipboard.writeText(value);}
+ catch(error){
+  const area=document.createElement("textarea");area.value=value;area.style.position="fixed";area.style.opacity="0";
+  document.body.appendChild(area);area.select();document.execCommand("copy");area.remove();
+ }
+ if(button){const old=button.textContent;button.textContent="COPIED";setTimeout(()=>button.textContent=old,1200);}
 }
 function copyGeneratedKey(){if(lastGeneratedKey)copyText(lastGeneratedKey,document.querySelector("#generatedKey button"));}
 function copyTrialKey(){if(lastTrialKey)copyText(lastTrialKey,document.querySelector("#trialGeneratedKey button"));}
@@ -225,7 +240,6 @@ async function createLicense(){
   await loadLicenses();
  }catch(error){status("createStatus",error.message);}
 }
-
 async function createTrialLicense(){
  try{
   const owner=document.getElementById("trialOwner").value.trim();
@@ -245,85 +259,128 @@ async function createTrialLicense(){
  }catch(error){status("trialCreateStatus",error.message);}
 }
 
-async function loadLicenses(){
+function makeCell(text,className=""){
+ const cell=document.createElement("td");if(className)cell.className=className;cell.textContent=text;return cell;
+}
+function makeBadge(text,className=""){
+ const badge=document.createElement("span");badge.className="badge"+(className?" "+className:"");badge.textContent=text;return badge;
+}
+async function loadLicenses(silent=false){
+ if(loadingLicenses)return;
+ loadingLicenses=true;
  try{
-  const result=await api("/api/licenses");const licenses=result.licenses||[];const rows=document.getElementById("licenseRows");rows.replaceChildren();
-  let active=0,bound=0;
+  const result=await api("/api/licenses");
+  const licenses=result.licenses||[];
+  const rows=document.getElementById("licenseRows");
+  rows.replaceChildren();
+  let active=0,bound=0,online=0;
+
   for(const license of licenses){
-   if(license.status==="active")active++;if(license.deviceBound)bound++;
+   if(license.status==="active")active++;
+   if(license.deviceBound)bound++;
+   if(license.online===true&&license.status==="active")online++;
+
    const tr=document.createElement("tr");
-   const owner=document.createElement("td");owner.textContent=license.owner||"—";
-   const type=document.createElement("td");const typeBadge=document.createElement("span");typeBadge.className="badge unbound";typeBadge.textContent=license.trial?"TRIAL":"STANDARD";type.appendChild(typeBadge);
-   const keyCell=document.createElement("td");const keyWrap=document.createElement("div");keyWrap.className="keycell";
-   const keyText=document.createElement("span");keyText.className="keytext";keyText.textContent=license.licenseKey||"Unavailable (legacy key)";
+   tr.appendChild(makeCell(license.owner||"—"));
+
+   const type=document.createElement("td");
+   type.appendChild(makeBadge(license.trial?"TRIAL":"STANDARD","unbound"));
+   tr.appendChild(type);
+
+   const keyCell=document.createElement("td");
+   const keyWrap=document.createElement("div");keyWrap.className="keycell";
+   const keyText=document.createElement("span");keyText.className="keytext";
+   keyText.textContent=license.licenseKey||"Unavailable (legacy key)";
    keyWrap.appendChild(keyText);
-   if(license.licenseKey){const copy=document.createElement("button");copy.className="secondary copykey";copy.textContent="COPY";copy.onclick=()=>copyText(license.licenseKey,copy);keyWrap.appendChild(copy);}
-   keyCell.appendChild(keyWrap);
-   const state=document.createElement("td");const badge=document.createElement("span");badge.className="badge";
-   if(license.status==="revoked")badge.className+=" revoked";else if(license.status==="expired")badge.className+=" expired";
-   badge.textContent=(license.status||"unknown").toUpperCase();state.appendChild(badge);
-   const expiry=document.createElement("td");expiry.textContent=license.lifetime?"LIFETIME / UNLIMITED":license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—";
-   const device=document.createElement("td");const deviceBadge=document.createElement("span");deviceBadge.className="badge unbound";
+   if(license.licenseKey){
+    const copy=document.createElement("button");copy.className="secondary copykey";copy.textContent="COPY";
+    copy.onclick=()=>copyText(license.licenseKey,copy);keyWrap.appendChild(copy);
+   }
+   keyCell.appendChild(keyWrap);tr.appendChild(keyCell);
+
+   const state=document.createElement("td");
+   let stateClass="";
+   if(license.status==="revoked")stateClass="revoked";
+   else if(license.status==="expired")stateClass="expired";
+   state.appendChild(makeBadge((license.status||"unknown").toUpperCase(),stateClass));
+   tr.appendChild(state);
+
+   const onlineCell=document.createElement("td");
+   const isOnline=license.online===true&&license.status==="active";
+   onlineCell.appendChild(makeBadge(isOnline?"ONLINE":"OFFLINE",isOnline?"":"offline"));
+   tr.appendChild(onlineCell);
+
+   tr.appendChild(makeCell(license.lifetime?"LIFETIME / UNLIMITED":license.expiresAt?new Date(license.expiresAt).toLocaleDateString():"—"));
+
+   const device=document.createElement("td");
    const boundCount=Number.isInteger(license.boundDeviceCount)?license.boundDeviceCount:(license.deviceBound?1:0);
    const deviceLimit=license.trial?(Number.isInteger(license.deviceLimit)?license.deviceLimit:1):1;
-   deviceBadge.textContent=boundCount+" / "+deviceLimit+" BOUND";device.appendChild(deviceBadge);
+   device.appendChild(makeBadge(boundCount+" / "+deviceLimit+" BOUND","unbound"));
+   tr.appendChild(device);
+
    const info=document.createElement("td");info.className="deviceinfo";
    const cpu=document.createElement("div");cpu.textContent="CPU: "+(license.cpu||"Not reported");
    const os=document.createElement("div");os.textContent="Windows: "+(license.windows||"Not reported");
-   const seen=document.createElement("div");seen.className="subtle";seen.textContent=license.lastSeen?"Last seen: "+new Date(license.lastSeen).toLocaleString():"Last seen: —";
-   info.append(cpu,os,seen);
+   const seen=document.createElement("div");seen.className="subtle";
+   seen.textContent="Last validation: "+(license.lastSeen?new Date(license.lastSeen).toLocaleString():"—");
+   const heartbeat=document.createElement("div");heartbeat.className="subtle";
+   heartbeat.textContent="Last heartbeat: "+(license.lastHeartbeat?new Date(license.lastHeartbeat).toLocaleString():"—");
+   info.append(cpu,os,seen,heartbeat);tr.appendChild(info);
+
    const action=document.createElement("td");
    if(license.status==="active"){
-    const revoke=document.createElement("button");revoke.className="danger";revoke.textContent="Revoke";revoke.onclick=()=>revokeLicense(license.id);action.appendChild(revoke);
-    if(license.deviceBound){const reset=document.createElement("button");reset.className="secondary";reset.textContent="Reset Device";reset.onclick=()=>unbindDevice(license.id);action.appendChild(reset);}
+    const revoke=document.createElement("button");revoke.className="danger";revoke.textContent="Revoke";
+    revoke.onclick=()=>revokeLicense(license.id);action.appendChild(revoke);
+    if(license.deviceBound){
+     const reset=document.createElement("button");reset.className="secondary";reset.textContent="Reset Device";
+     reset.onclick=()=>unbindDevice(license.id);action.appendChild(reset);
+    }
    }else if(license.status==="revoked"||license.status==="expired"){
-    const remove=document.createElement("button");remove.className="danger";remove.textContent="Delete";remove.onclick=()=>deleteLicense(license.id);action.appendChild(remove);
+    const remove=document.createElement("button");remove.className="danger";remove.textContent="Delete";
+    remove.onclick=()=>deleteLicense(license.id);action.appendChild(remove);
    }else action.textContent="—";
-   tr.append(owner,type,keyCell,state,expiry,device,info,action);rows.appendChild(tr);
+   tr.appendChild(action);
+   rows.appendChild(tr);
   }
-  document.getElementById("totalCount").textContent=licenses.length;document.getElementById("activeCount").textContent=active;document.getElementById("deviceCount").textContent=bound;
-  status("licenseStatus",licenses.length+" license(s) loaded successfully.");
- }catch(error){status("licenseStatus",error.message);}
+
+  if(!licenses.length){
+   const tr=document.createElement("tr");const td=makeCell("No licenses found.");
+   td.colSpan=9;tr.appendChild(td);rows.appendChild(tr);
+  }
+  document.getElementById("totalCount").textContent=licenses.length;
+  document.getElementById("activeCount").textContent=active;
+  document.getElementById("onlineCount").textContent=online;
+  document.getElementById("deviceCount").textContent=bound;
+  status("licenseStatus",licenses.length+" license(s) loaded successfully. Last refreshed: "+new Date().toLocaleTimeString());
+ }catch(error){
+  if(!silent)status("licenseStatus",error.message);
+  if(error.message==="Unauthorized."){showLogin();status("loginStatus","Session expired. Please authenticate again.");}
+ }finally{loadingLicenses=false;}
 }
 
 async function revokeLicense(id){
  if(!confirm("Permanently revoke this license?"))return;
- try{
-  await api("/api/licenses/"+encodeURIComponent(id)+"/revoke","POST");
-  status("licenseStatus","License revoked.");
-  await loadLicenses();
- }catch(error){status("licenseStatus",error.message);}
+ try{await api("/api/licenses/"+encodeURIComponent(id)+"/revoke","POST");status("licenseStatus","License revoked.");await loadLicenses();}
+ catch(error){status("licenseStatus",error.message);}
 }
-
 async function unbindDevice(id){
- if(!confirm("Remove this license's registered device?\nThe next successful activation will bind a new device."))return;
- try{
-  await api("/api/licenses/"+encodeURIComponent(id)+"/unbind","POST");
-  status("licenseStatus","Device binding reset.");
-  await loadLicenses();
- }catch(error){status("licenseStatus",error.message);}
+ if(!confirm("Remove this license's registered device(s)?\nThe next successful activation will bind a device again."))return;
+ try{await api("/api/licenses/"+encodeURIComponent(id)+"/unbind","POST");status("licenseStatus","Device binding reset.");await loadLicenses();}
+ catch(error){status("licenseStatus",error.message);}
 }
-
 async function deleteLicense(id){
  if(!confirm("PERMANENTLY DELETE THIS EXPIRED OR REVOKED LICENSE?\n\nThis action cannot be undone."))return;
- try{
-  await api("/api/licenses/"+encodeURIComponent(id),"DELETE");
-  status("licenseStatus","License permanently deleted.");
-  await loadLicenses();
- }catch(error){status("licenseStatus",error.message);}
+ try{await api("/api/licenses/"+encodeURIComponent(id),"DELETE");status("licenseStatus","License permanently deleted.");await loadLicenses();}
+ catch(error){status("licenseStatus",error.message);}
 }
-
 async function logout(){
  try{await api("/api/logout","POST");}
  catch(error){console.error(error);}
  finally{
-  token=null;
-  sessionStorage.removeItem("nexora_session");
-  showLogin();
+  token=null;sessionStorage.removeItem("nexora_session");showLogin();
   status("loginStatus","Logged out successfully.");
  }
 }
-
 if(token)verifySession();
 </script>
 </body>

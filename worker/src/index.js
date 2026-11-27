@@ -80,8 +80,10 @@ async function hashKey(value) {
   return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
-function generateKey() {
-  return "NX-" + base64url(crypto.getRandomValues(new Uint8Array(32)));
+function generateKey(trial = false) {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const characters = [...bytes].map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+  return trial ? "NX-TRIAL-" + characters : "NX-" + base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
 // License keys are encrypted at rest for authenticated admin recovery.
@@ -392,7 +394,7 @@ export default {
         const requestedDeviceLimit = body.deviceLimit === undefined ? 1 : Number(body.deviceLimit);
         const deviceLimit = trial ? requestedDeviceLimit : 1;
 
-        if (!owner || owner.length > 60) {
+        if ((!trial && !owner) || owner.length > 60) {
           return json({ error: "Invalid license owner." }, 400, origin, env);
         }
         if (trial && (!Number.isInteger(days) || days < 1 || days > 3)) {
@@ -405,14 +407,14 @@ export default {
           return json({ error: "Validity must be 1–3650 days, or choose lifetime." }, 400, origin, env);
         }
 
-        const key = generateKey();
+        const key = generateKey(trial);
         const hash = await hashKey(key);
         const encryptedKey = await encryptLicenseKey(key, env.SESSION_SECRET);
         const id = crypto.randomUUID();
         const now = new Date();
         const expires = lifetime ? null : new Date(now.getTime() + days * 86400000);
         const record = {
-          id, owner, trial, lifetime,
+          id, owner: trial ? "" : owner, trial, lifetime,
           createdAt: now.toISOString(),
           expiresAt: expires ? expires.toISOString() : null,
           revoked: false,

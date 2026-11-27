@@ -1,4 +1,5 @@
 const SESSION_TTL = 8 * 60 * 60;
+const ONLINE_TIMEOUT_MS = 90 * 1000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -83,8 +84,7 @@ function generateKey() {
   return "NX-" + base64url(crypto.getRandomValues(new Uint8Array(32)));
 }
 
-// License keys are encrypted at rest for authenticated admin recovery. The
-// existing SESSION_SECRET is used to derive the AES-GCM key; keep it backed up.
+// License keys are encrypted at rest for authenticated admin recovery.
 async function encryptionKey(secret) {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode("NEXORA-LICENSE-KEYS:" + secret));
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
@@ -99,10 +99,14 @@ async function decryptLicenseKey(record, secret) {
   if (!record || !record.keyEncrypted || !record.keyIv) return null;
   try {
     const key = await encryptionKey(secret);
-    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decodeBase64url(record.keyIv) }, key, decodeBase64url(record.keyEncrypted));
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: decodeBase64url(record.keyIv) },
+      key, decodeBase64url(record.keyEncrypted)
+    );
     return decoder.decode(plain);
   } catch { return null; }
 }
+
 function cleanDeviceText(value, max = 120) {
   if (typeof value !== "string") return null;
   const clean = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().replace(/\s+/g, " ");
@@ -127,6 +131,23 @@ async function authenticate(request, env) {
   return (await env.LICENSE_DB.get("session:" + data.sid)) === "admin";
 }
 
+function getBoundDevices(license) {
+  if (license.trial === true) {
+    return Array.isArray(license.deviceIds)
+      ? license.deviceIds
+      : (license.deviceId ? [license.deviceId] : []);
+  }
+  return license.deviceId ? [license.deviceId] : [];
+}
+
+function isOnline(license, now = Date.now()) {
+  if (!validLicense(license) || !license.lastHeartbeat) return false;
+  const heartbeatTime = Date.parse(license.lastHeartbeat);
+  return Number.isFinite(heartbeatTime) &&
+    heartbeatTime <= now + 5000 &&
+    now - heartbeatTime <= ONLINE_TIMEOUT_MS;
+}
+
 async function readLicenses(env) {
   const result = await env.LICENSE_DB.list({ prefix: "license:", limit: 1000 });
   const records = await Promise.all(result.keys.map(async entry => {
@@ -135,16 +156,23 @@ async function readLicenses(env) {
     const expired = !value.lifetime && (!value.expiresAt || Date.now() >= Date.parse(value.expiresAt));
     const status = value.revoked ? "revoked" : expired ? "expired" : "active";
     const licenseKey = await decryptLicenseKey(value, env.SESSION_SECRET);
-    const boundDevices = value.trial === true
-      ? (Array.isArray(value.deviceIds) ? value.deviceIds : (value.deviceId ? [value.deviceId] : []))
-      : (value.deviceId ? [value.deviceId] : []);
+    const boundDevices = getBoundDevices(value);
     const deviceLimit = value.trial === true
       ? Math.min(1000, Math.max(1, Number.isInteger(value.deviceLimit) ? value.deviceLimit : 1))
       : 1;
-    return { ...value, keyEncrypted: undefined, keyIv: undefined, licenseKey, status,
-      deviceBound: boundDevices.length > 0, boundDeviceCount: boundDevices.length, deviceLimit };
+    return {
+      ...value,
+      keyEncrypted: undefined,
+      keyIv: undefined,
+      licenseKey,
+      status,
+      online: isOnline(value),
+      deviceBound: boundDevices.length > 0,
+      boundDeviceCount: boundDevices.length,
+      deviceLimit
+    };
   }));
-  return records.filter(Boolean).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return records.filter(Boolean).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 }
 
 function validDeviceId(value) {
@@ -163,12 +191,10 @@ async function deleteHashMappings(env, id) {
     const options = { prefix: "hash:", limit: 1000 };
     if (cursor) options.cursor = cursor;
     const page = await env.LICENSE_DB.list(options);
-
     for (const entry of page.keys) {
       const mappedId = await env.LICENSE_DB.get(entry.name);
       if (mappedId === id) await env.LICENSE_DB.delete(entry.name);
     }
-
     cursor = page.cursor;
     if (page.list_complete) break;
   } while (cursor);
@@ -184,15 +210,12 @@ export default {
       if (!env.ADMIN_PASSWORD || !env.SESSION_SECRET || !env.LICENSE_DB || !env.ADMIN_ORIGIN) {
         return json({ error: "Server configuration incomplete." }, 500, origin, env);
       }
-
       if (env.SESSION_SECRET.length < 32) {
         return json({ error: "Session secret must be at least 32 characters." }, 500, origin, env);
       }
-
       if (origin && origin !== env.ADMIN_ORIGIN) {
         return json({ error: "Origin not allowed." }, 403, origin, env);
       }
-
       if (request.method === "OPTIONS") {
         if (!origin || origin !== env.ADMIN_ORIGIN) return new Response(null, { status: 403 });
         return new Response(null, {
@@ -208,7 +231,6 @@ export default {
         if (!constantTimeEqual(password, env.ADMIN_PASSWORD)) {
           return json({ error: "Invalid password." }, 401, origin, env);
         }
-
         const sid = crypto.randomUUID();
         await env.LICENSE_DB.put("session:" + sid, "admin", { expirationTtl: SESSION_TTL });
         const token = await createToken(sid, env.SESSION_SECRET);
@@ -238,7 +260,6 @@ export default {
         const body = await request.json();
         const key = String(body.key || "").trim();
         const deviceId = body.deviceId;
-
         if (!key || key.length > 100 || !validDeviceId(deviceId)) {
           return json({ valid: false, error: "Invalid license credentials." }, 400, origin, env);
         }
@@ -253,8 +274,6 @@ export default {
           return json({ valid: false, error: "License expired or revoked." }, 403, origin, env);
         }
 
-        // Trial keys support a configurable device pool. Standard keys retain
-        // their original one-device binding behavior.
         const reportedCpu = cleanDeviceText(body.cpu, 120);
         const reportedWindows = cleanDeviceText(body.windows || body.os, 120);
 
@@ -287,7 +306,11 @@ export default {
 
         if (reportedCpu) license.cpu = reportedCpu;
         if (reportedWindows) license.windows = reportedWindows;
-        license.lastSeen = new Date().toISOString();
+        const now = new Date().toISOString();
+        license.lastSeen = now;
+        // Validation counts as the initial presence signal; the client must
+        // continue sending /api/heartbeat to remain online.
+        license.lastHeartbeat = now;
         await env.LICENSE_DB.put(storageKey, JSON.stringify(license));
 
         return json({
@@ -295,39 +318,63 @@ export default {
           owner: license.owner,
           expiresAt: license.expiresAt,
           deviceBound: true,
-          boundDeviceCount: license.trial === true
-            ? (Array.isArray(license.deviceIds) ? license.deviceIds.length : (license.deviceId ? 1 : 0))
-            : 1,
+          boundDeviceCount: getBoundDevices(license).length,
           deviceLimit: license.trial === true
             ? (Number.isInteger(license.deviceLimit) ? license.deviceLimit : 1) : 1
         }, 200, origin, env);
       }
 
-      /* ADMIN AUTH REQUIRED */
+      /* PUBLIC HEARTBEAT: only a currently bound device can update presence */
+      if (request.method === "POST" && path === "/api/heartbeat") {
+        const body = await request.json();
+        const key = String(body.key || "").trim();
+        const deviceId = body.deviceId;
+
+        if (!key || key.length > 100 || !validDeviceId(deviceId)) {
+          return json({ success: false, error: "Invalid license credentials." }, 400, origin, env);
+        }
+
+        const hash = await hashKey(key);
+        const id = await env.LICENSE_DB.get("hash:" + hash);
+        if (!id) return json({ success: false, error: "Invalid license key." }, 403, origin, env);
+
+        const storageKey = "license:" + id;
+        const license = await env.LICENSE_DB.get(storageKey, "json");
+        if (!validLicense(license)) {
+          return json({ success: false, error: "License expired or revoked." }, 403, origin, env);
+        }
+
+        const authorized = getBoundDevices(license).includes(deviceId);
+        if (!authorized) {
+          return json({ success: false, error: "Device is not bound to this license." }, 403, origin, env);
+        }
+
+        const now = new Date().toISOString();
+        license.lastHeartbeat = now;
+        await env.LICENSE_DB.put(storageKey, JSON.stringify(license));
+
+        return json({ success: true, online: true, lastHeartbeat: now }, 200, origin, env);
+      }
+
+      /* ALL REMAINING ROUTES REQUIRE ADMIN AUTH */
       if (!await authenticate(request, env)) {
         return json({ error: "Unauthorized." }, 401, origin, env);
       }
 
-      /* DELETE REVOKED LICENSE */
+      /* DELETE REVOKED OR EXPIRED LICENSE */
       if (request.method === "DELETE" && /^\/api\/licenses\/[a-f0-9-]+$/i.test(path)) {
         const id = path.split("/").pop();
         const storageKey = "license:" + id;
         const record = await env.LICENSE_DB.get(storageKey, "json");
-
         if (!record) return json({ error: "License not found." }, 404, origin, env);
 
         const expired = !record.lifetime && (!record.expiresAt || Date.now() >= Date.parse(record.expiresAt));
         if (!record.revoked && !expired) {
           return json({ error: "Only revoked or expired licenses can be deleted." }, 409, origin, env);
         }
-
         await deleteHashMappings(env, id);
         await env.LICENSE_DB.delete(storageKey);
-
-        return json({
-          success: true,
-          message: "License permanently deleted."
-        }, 200, origin, env);
+        return json({ success: true, message: "License permanently deleted." }, 200, origin, env);
       }
 
       /* LIST LICENSES */
@@ -348,7 +395,6 @@ export default {
         if (!owner || owner.length > 60) {
           return json({ error: "Invalid license owner." }, 400, origin, env);
         }
-
         if (trial && (!Number.isInteger(days) || days < 1 || days > 3)) {
           return json({ error: "Trial validity must be 1, 2, or 3 days." }, 400, origin, env);
         }
@@ -365,7 +411,6 @@ export default {
         const id = crypto.randomUUID();
         const now = new Date();
         const expires = lifetime ? null : new Date(now.getTime() + days * 86400000);
-
         const record = {
           id, owner, trial, lifetime,
           createdAt: now.toISOString(),
@@ -378,28 +423,26 @@ export default {
           cpu: null,
           windows: null,
           lastSeen: null,
+          lastHeartbeat: null,
           ...encryptedKey
         };
 
         await env.LICENSE_DB.put("license:" + id, JSON.stringify(record));
         await env.LICENSE_DB.put("hash:" + hash, id);
-
         return json({
           success: true,
           key,
-          license: { ...record, status: "active", deviceBound: false }
+          license: { ...record, status: "active", deviceBound: false, online: false }
         }, 201, origin, env);
       }
 
       /* REVOKE AND UNBIND */
       const match = path.match(/^\/api\/licenses\/([a-f0-9-]+)\/(revoke|unbind)$/i);
-
       if (match && request.method === "POST") {
         const id = match[1];
         const action = match[2];
         const storageKey = "license:" + id;
         const record = await env.LICENSE_DB.get(storageKey, "json");
-
         if (!record) return json({ error: "License not found." }, 404, origin, env);
 
         if (action === "revoke") {
@@ -423,7 +466,6 @@ export default {
       }
 
       return json({ error: "Endpoint not found." }, 404, origin, env);
-
     } catch (error) {
       console.error("NEXORA API error:", error.message);
       return json({ error: "Internal server error." }, 500, origin, env);
